@@ -1,0 +1,12 @@
+wheel
+numpy
+spyder
+yfinance
+pandas
+pytrends
+matplotlib
+sqlalchemy
+scipy
+backtesting
+pytest
+numba

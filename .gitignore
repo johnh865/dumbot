@@ -1,0 +1,30 @@
+# Ignore all the following extensions
+*.png
+*.pdf
+*.log
+*.pyc
+*.xlsx
+*.xlsm
+*.ppt
+*.pptx
+*.html
+*.sqlite3
+
+# Ignore the following directories
+build/
+dist/
+notebooks/
+explore/
+.venv/
+
+.pylint.d/
+
+# Ignore project files
+.spyproject/
+
+**/.spyproject/*
+**/__pycache__/*
+**/__pycache__/
+
+.idea/
+.pytest_cache/
