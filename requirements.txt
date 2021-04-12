@@ -1,6 +1,5 @@
 wheel
 numpy
-spyder
 yfinance
 pandas
 pytrends
@@ -10,3 +9,5 @@ scipy
 backtesting
 pytest
 numba
+spyder=4.2.5
+bs4

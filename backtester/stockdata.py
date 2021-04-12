@@ -1,47 +1,37 @@
 import datetime
-import math
-from functools import lru_cache, cached_property
+from functools import lru_cache
 from abc import abstractmethod, ABCMeta
 from typing import Callable
 
-from sqlalchemy import create_engine
+
 import pandas as pd
 import numpy as np
 
-from backtest.data.symbols import ALL
-from backtest.definitions import (
-    CONNECTION_PATH, 
-    DF_DATE, DF_ADJ_CLOSE, DF_SMOOTH_CHANGE, DF_SMOOTH_CLOSE,
-    DF_TRUE_CHANGE,
-    TABLE_ALL_TRADE_DATES,
+from stockdata.symbols import ALL
+
+from stockdata.yahoo import (
+    read_yahoo_dataframe, 
+    read_yahoo_tablenames,
+    read_yahoo_trade_dates,
     )
 
-
-engine = create_engine(CONNECTION_PATH, echo=False)
-
-@lru_cache(maxsize=100)
-def read_yahoo_dataframe(symbol: str):
-    """Read all available stock symbol Yahoo data."""
-    dataframe = pd.read_sql(symbol, engine).set_index(DF_DATE, drop=True)
-    return dataframe
-	
 
 class BaseData(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, *args, **kwargs):
-        pass
+        raise NotImplementedError('This method needs to be implemented by user')
             
     
     @abstractmethod
     def get_symbol_all(self, symbol:str) -> pd.DataFrame:
         """Get all available dataframe data for a stock ticker symbol"""
-        pass
+        raise NotImplementedError('This method needs to be implemented by user')
 
 
     @abstractmethod
     def get_symbol_names(self) -> list:
         """Get all available symbols."""
-        pass
+        raise NotImplementedError('This method needs to be implemented by user')
     
     
     def get_symbol_before(self, symbol: str, date: datetime.datetime) -> pd.DataFrame:
@@ -79,6 +69,7 @@ class StockData(BaseData):
            
     
 class YahooData(StockData):
+    """Retrieve data from Yahoo online dataset."""
     def __init__(self, symbols=()):
         if len(symbols) == 0:
             symbols = ALL
@@ -91,12 +82,11 @@ class YahooData(StockData):
     
     
     def get_symbol_names(self):
-        return self._symbols
+        return read_yahoo_tablenames()
     
     
     def get_trade_dates(self):
-        df = pd.read_sql(TABLE_ALL_TRADE_DATES, engine)
-        return df[DF_DATE].values
+        return read_yahoo_trade_dates()
     
 
 def _get_indicator_name(func, args, kwargs):
@@ -113,7 +103,20 @@ def _get_indicator_name(func, args, kwargs):
         
 
 class Indicators(BaseData):
+    """Create indicators for stock data `StockData` for use in backtesting. 
+
+    Parameters
+    ----------
+    stock_data : StockData, optional
+        `StockData` for which to create indicators. The default is None.
+        Eventually to generate indicators, you must assign self.stock_data.
+    """
+    
     def __init__(self, stock_data: StockData=None):
+        """
+
+
+        """
         self.stock_data = stock_data
         self._indicators = {}
         self._class_indicators = {}

@@ -2,10 +2,10 @@
 
 import numpy as np
 
-from dumbot.model import Action, SymbolTransactions
-from dumbot.definitions import ACTION_BUY, ACTION_SELL, ACTION_SELL_PERCENT
+from backtester.model import Action, SymbolTransactions
+from backtester.definitions import ACTION_BUY, ACTION_SELL, ACTION_SELL_PERCENT
 import datetime
-from dumbot.stockdata import YahooData
+from backtester.stockdata import YahooData
 # a1 = Action()
 
 
@@ -14,6 +14,7 @@ yahoo_data = YahooData()
 def test_last_trading_date():
     sh = SymbolTransactions('GOOG', yahoo_data, commission=0.0)
     date = datetime.datetime(2017, 2, 25)
+    date = np.datetime64(date)
     
     last_date = sh.get_previous_trading_date(date)
     next_date = sh.get_next_trading_date(date)
@@ -51,6 +52,11 @@ def test_3():
     date1 = datetime.datetime(2017, 1, 5)
     date2 = datetime.datetime(2017, 1, 20)
     date3 = datetime.datetime(2017, 5, 25)
+    date1 = np.datetime64(date1)
+    date2 = np.datetime64(date2)
+    date3 = np.datetime64(date3)
+    
+    
     
     a1 = Action(date=date1, symbol=symbol, name=ACTION_BUY, amount=1000)
     a2 = Action(date=date2, symbol=symbol, name=ACTION_SELL, amount=400)
@@ -86,6 +92,8 @@ def test_3():
     assert shares3 == a3.shares
     
     date4 = datetime.datetime(2018, 1, 1)
+    date4 = np.datetime64(date4)
+    
     shares4 = sh.get_shares(date4)
     assert shares4 == a3.shares
     return
@@ -157,8 +165,8 @@ def test_interday():
     
     
 if __name__ == '__main__':
-    # test_3()
-    # test_last_trading_date()
-    # test_last_trading_date2()
-    # test_exec_one()
+    test_3()
+    test_last_trading_date()
+    test_last_trading_date2()
+    test_exec_one()
     test_interday()

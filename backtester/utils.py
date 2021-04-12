@@ -9,6 +9,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy import MetaData
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import inspect
 
 import logging
 
@@ -48,6 +49,11 @@ def drop_table(table_name, *args, **kwargs):
         logging.info(f'Deleting {table_name} table')
         base.metadata.drop_all(engine, [table], checkfirst=True)
         
+        
+def get_table_names(*args, **kwargs):
+    engine = create_engine(*args, **kwargs)
+    insp = inspect(engine)
+    return insp.get_table_names()
 
     
 def dates2days(dates: np.ndarray):
@@ -60,6 +66,21 @@ def dates2days(dates: np.ndarray):
 def datetime_np2py(date: np.datetime64):
     t = np.datetime64(date, 'us').astype(datetime.datetime)
     return t
+
+
+
+def datetime_to_np(date: datetime.datetime) -> np.array:
+    """Convert a time object/array to numpy datetime64, or numpy array."""
+    
+    # Try to convert a scalar time
+    try:
+        out = np.datetime64(date)
+        
+    # Try to convert array time
+    except ValueError:
+        out = np.asarray(date).astype('datetime64')
+    return out
+    
 
 
 def floor_to_date(date: datetime.datetime):
@@ -137,6 +158,7 @@ def interp_const_after(x: np.ndarray,
     
     
     y = np.asarray(y)
+    x = np.asarray(x)
     
     # Check to see if input x0 is an array. If it is not, convert back to scalar
     # At the end. 
@@ -145,11 +167,17 @@ def interp_const_after(x: np.ndarray,
     x0 = np.atleast_1d(x0)
     imax = len(x) - 1
     
+    # Get x0 locations that exactly match the date    
     sort_index = np.searchsorted(x, x0)
     sort_index = np.minimum(sort_index, imax)
+    
+    
     y0 = y[sort_index]
     
-    adjust_locs= x[sort_index] != x0
+    # Get x0 locations that do not exactly match date. 
+    # Adjust their index by -1.
+    # Exclude x0 locations greater than x.max()
+    adjust_locs= (x[sort_index] != x0) & (x0 < x[-1])
     
     adjust_index = sort_index[adjust_locs] - 1
     adjust_index = np.maximum(adjust_index, 0)

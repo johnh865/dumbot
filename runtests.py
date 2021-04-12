@@ -2,7 +2,7 @@
 """Run all package tests"""
 
 import pytest
-import dumbot
+import backtester
 from os.path import join
 
 pytest.main(['--verbose'])

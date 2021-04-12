@@ -14,19 +14,19 @@ import pandas as pd
 
 from sqlalchemy import create_engine
 
-from backtest.definitions import (CONNECTION_PATH, DF_ADJ_CLOSE, DF_DATE,
+from backtester.definitions import (CONNECTION_PATH, DF_ADJ_CLOSE, DF_DATE,
                                 DF_HIGH, DF_LOW, DF_CLOSE)
-from backtest.definitions import (ACTION_BUY, ACTION_SELL, ACTION_DEPOSIT, 
+from backtester.definitions import (ACTION_BUY, ACTION_SELL, ACTION_DEPOSIT, 
                                 ACTION_WITHDRAW, ACTION_HOLD,
                                 ACTION_SELL_PERCENT)
-from backtest.definitions import SMALL_DOLLARS
+from backtester.definitions import SMALL_DOLLARS
 
-from backtest.data.symbols import ALL
-from backtest.stockdata import StockData
-from backtest.utils import dates2days, floor_to_date
-from backtest.utils import interp_const_after, _delete_attr
-from backtest.exceptions import NoMoneyError, TradingError
-from backtest import utils
+from stockdata.symbols import ALL
+from backtester.stockdata import StockData
+from backtester.utils import dates2days, floor_to_date
+from backtester.utils import interp_const_after, _delete_attr
+from backtester.exceptions import NoMoneyError, TradingError
+from backtester import utils
 
 
 
@@ -128,6 +128,7 @@ class AccountBalance:
     
     def __post_init__(self):
         self.date = np.datetime64(self.date)
+
     
     
     def __repr__(self):
@@ -268,8 +269,10 @@ class SymbolTransactions:
     def get_shares(self, dates: np.ndarray) -> np.ndarray:
         """Get the number of invested shares for given dates."""
         df = self.dataframe
-        shares = df['shares']
-        times = df.index
+        shares = df['shares'].values
+        times = df.index.values
+        dates = utils.datetime_to_np(dates)
+        # dates = np.asarray(dates).astype('datetime64')
         out = interp_const_after(times, shares, dates, before=0.0)
         return out
         
@@ -640,6 +643,7 @@ class Transactions:
         new = {}
         st : SymbolTransactions
         for symbol, st in sdict.items():
+            date = np.datetime64(date)
             value = st.get_share_valuation(date)
             new[symbol] = value
         return pd.Series(new)

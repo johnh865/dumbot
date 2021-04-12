@@ -2,8 +2,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from dumbot.stockdata import YahooData, Indicators
-from dumbot.definitions import DF_ADJ_CLOSE
+from backtester.stockdata import YahooData, Indicators
+from backtester.definitions import DF_ADJ_CLOSE
 from datetime import datetime
 
 def test_yahoo():

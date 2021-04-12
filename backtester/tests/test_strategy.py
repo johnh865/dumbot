@@ -2,12 +2,12 @@
 import pdb
 import numpy as np
 
-from dumbot.backtest import Strategy, Backtest
-from dumbot.stockdata import YahooData, Indicators
-from dumbot.indicators import moving_avg
-from dumbot.exceptions import NoMoneyError
+from backtester.backtest import Strategy, Backtest
+from backtester.stockdata import YahooData, Indicators
+from backtester.indicators import moving_avg
+from backtester.exceptions import NoMoneyError
 from datetime import datetime
-from dumbot.utils import crossover
+from backtester.utils import crossover
 
 yahoo = YahooData(['DIS', 'FNILX', 'GOOG', 'VOO'])
 
@@ -35,11 +35,11 @@ def test1():
     b = Backtest(stock_data=yahoo, 
                  strategy=MyStrategy,
                  cash=1000,
-                 start_date = datetime(2016, 1, 1),
+                 start_date = datetime(2018, 1, 1),
                  end_date = datetime(2019, 1, 1),
                  )
     b.start()
-    df = b.dataframe()
+    df = b.stats.transactions
     assert len(df) > 0
     
     
@@ -136,6 +136,8 @@ def test_buy_hold():
             
     
 if __name__ == '__main__':
+    test1()
+    test2()
     df = test_buy_hold()
     
     

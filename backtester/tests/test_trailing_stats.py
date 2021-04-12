@@ -3,17 +3,19 @@ import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dumbot.indicators import TrailingStats
-from dumbot.definitions import DF_ADJ_CLOSE, DF_VOLUME
-from dumbot.data.symbols import ALL
-from dumbot.stockdata import YahooData
+from backtester.indicators import TrailingStats
+from backtester.definitions import DF_ADJ_CLOSE, DF_VOLUME, DF_HIGH, DF_LOW
+from stockdata.symbols import ALL
+from backtester.stockdata import YahooData
+
+
 import timeit
 
 
 def test1():
     
     symbols = np.array(ALL)
-    # np.random.seed(0)
+    np.random.seed(1)
     np.random.shuffle(symbols)
 
     
@@ -26,26 +28,23 @@ def test1():
     y = YahooData([symbols[0]])
     df = y.get_symbol_all(symbols[0])
     
-    
-    series = df[DF_ADJ_CLOSE]
-    window_size = 301
+    df1 = df.iloc[-600:]
+    series = df1[DF_ADJ_CLOSE]
+    window_size = 51
     ts = TrailingStats(series, window_size)
     
     
     times = ts.series.index
-    plt.subplot(3,1,1)
+    
+    plt.figure()
+    plt.subplot(2,1,1)
     plt.title(symbols[0] + ' Rolling Avg')
     plt.plot(times, ts.rolling_avg)
     plt.plot(series.index, series)
+    plt.plot(series.index, df1[DF_HIGH])
+    plt.plot(series.index, df1[DF_LOW])
     plt.grid()
-    
-    plt.subplot(3,1,2)
-    plt.title('Exp Growth Rate')
-    plt.plot(times, ts.exp_growth)
-    plt.grid()
-    
-    plt.subplot(3,1,3)
-    plt.title('Relative Slope')
+
     
     def test1():
         return ts.slope_normalized
@@ -58,10 +57,18 @@ def test1():
     print(f'Slope norm v1 time = {t1:.2f}')
     t2 = timeit.timeit(test2)
     print(f'Slope norm v2 time = {t2:.2f}')
+    
+    
+    plt.subplot(2,1,2)
+    plt.title('Exp Growth Rate')
+    plt.plot(times, ts.exp_growth, label='exp rate')
+    
+    plt.plot(times, ts.slope_normalized, label='slope-norm')
+    plt.legend()
+    plt.grid()
 
-    plt.plot(times, ts.slope_normalized)
     # pdb.set_trace()
-    plt.plot(times, ts._slope_normalized_check, '--')
+    # plt.plot(times, ts._slope_normalized_check, '--')
     
     
     y1 = ts.slope_normalized
@@ -76,7 +83,6 @@ def test1():
     y2 = ts._exponential_regression_check[1]
     assert(np.all(np.isclose(y1[~np.isnan(y1)], y2[~np.isnan(y2)])))
 
-    plt.grid()
     
     return
 
@@ -103,6 +109,8 @@ def test_trailing_avg():
     assert np.all(np.isclose(avgs, ts.rolling_avg[window:]))
     
     times = series.index[window:]
+    
+    plt.figure()
     plt.plot(ts.series, label='actual')
     plt.plot(times, avgs, label='TEST AVG')
     plt.plot(ts.series.index, ts.rolling_avg, '--', label='IMPLEMENTED AVG')
@@ -131,41 +139,10 @@ def test_close_intervals():
 
 
 
-def test_buysell():
-    
-    
-    symbol = 'BBY'
-    y = YahooData([symbol])
-    df = y.get_symbol_all(symbol)    
-    series = df[DF_ADJ_CLOSE]
-
-    
-    df = df.iloc[-1000:]
-    bbs = get_data.BestBuySell(df)
-    buy, sell, growth = bbs._calculate(20)
-
-        
-    ii = 0
-    plt.subplot(2,1,1)
-    for buy1, sell1 in zip(buy, sell):
-        times = df.index[[buy1, sell1]]
-        closes = bbs.close[[buy1, sell1]]
-        plt.plot(times, closes, '--', alpha=.5)
-        ii += 1
-        if ii > 5000:
-            break
-        
-    plt.plot(bbs.df.index, bbs.close, alpha=1)
-    plt.grid()
-    plt.subplot(2,1,2)
-    plt.plot(bbs.df.index, df[DF_VOLUME], alpha=1)
-    plt.grid()
-    # pdb.set_trace()
-    return
 
 
 if __name__ == '__main__':
-    # test1()
+    test1()
     test_trailing_avg()
     test_close_intervals()
 

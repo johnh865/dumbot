@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
-from dumbot.utils import floor_to_date, interp_const_after
+from backtester.utils import floor_to_date, interp_const_after
 import datetime
 
 def test_floor_to_date1():
@@ -35,13 +35,11 @@ def test_values_between():
     
     x0 = [-5.5, 0, 1, 1.5, 1.6, 2, 5.2, 6.7, 8, 20]
     x0 = np.array(x0)
-    x0 = np.minimum(x.max(), x0)
-    x0 = np.maximum(x.min(), x0)
     
-    y0 = np.floor(x0)**2
+    x0c = np.minimum(x.max(), x0)
+    x0c = np.maximum(x.min(), x0c)
+    y0 = np.floor(x0c)**2
     
-    ii = np.searchsorted(x, x0)
-
     yt = interp_const_after(x, y, x0)
     assert np.all(y0 == yt)
     return
@@ -87,6 +85,24 @@ def test_values_between4():
     assert np.isscalar(yt)
     return
 
+
+def test_values_between5():
+    
+    x = np.array([
+        np.datetime64('2016-01-01'),
+        np.datetime64('2016-03-01'),
+        np.datetime64('2016-04-01'),
+        ])    
+    y = np.array([5, 10, 0])
+    x0 = np.datetime64('2016-06-23')
+    x0 = np.array(x0)
+    d = {'x':x, 'y':y}
+    df = pd.DataFrame(d)
+    
+    yt = interp_const_after(df['x'], df['y'], x0)
+    assert yt == 0
+    return
+
     
 if __name__ == '__main__':
     test_floor_to_date1()
@@ -96,6 +112,7 @@ if __name__ == '__main__':
     test_values_between2()
     test_values_between3()
     test_values_between4()
+    test_values_between5()
     
     
     

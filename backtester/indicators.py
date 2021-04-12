@@ -2,12 +2,11 @@
 import math
 from functools import cached_property
 
-
 import pandas as pd
 import numpy as np
 from scipy.stats import linregress
 
-from backtest.definitions import DF_ADJ_CLOSE
+from backtester.definitions import DF_ADJ_CLOSE
 
 
 def moving_avg(period, df: pd.DataFrame):

@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 
-from dumbot.model import Action, Transactions
-from dumbot.definitions import ACTION_BUY, ACTION_SELL, ACTION_SELL_PERCENT
+from backtester.model import Action, Transactions
+from backtester.definitions import ACTION_BUY, ACTION_SELL, ACTION_SELL_PERCENT
 import datetime
-from dumbot.stockdata import YahooData
+from backtester.stockdata import YahooData
 # a1 = Action()
 
 
@@ -53,8 +53,8 @@ def test_transations():
     for bb in t1.balances:
         print(bb)
         
-    df_a = t1.asset_history()
-    df_t = t1.dataframe()    
+    df_a = t1.asset_history
+    df_t = t1.dataframe  
     return
 
 def test_interday():
@@ -85,8 +85,8 @@ def test_interday():
         actions = actions
         )
     
-    df_a = t1.asset_history()
-    df_t = t1.dataframe()
+    df_a = t1.asset_history
+    df_t = t1.dataframe
     
     v1 =  df_a['GOOG'] + df_a['MSFT'] + df_a['available_funds'] 
     v2 = df_a['equity']

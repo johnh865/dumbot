@@ -6,7 +6,7 @@ CONNECTION_NAME = 'sqlite:///db.sqlite3'
 PACKAGE_PATH = dirname(__file__)
 PROJECT_PATH = dirname(PACKAGE_PATH)
 CONNECTION_PATH = 'sqlite:///' + join(PACKAGE_PATH, 'data', 'db.sqlite3')
-
+DATA_PATH = join(PACKAGE_PATH, 'data')
 
 # Define a 'small number' for round-off calcs. 
 SMALL_DOLLARS = 1e-4
@@ -17,13 +17,13 @@ DF_ADJ_CLOSE = 'Adj Close'
 DF_HIGH = 'High'
 DF_LOW = 'Low'
 DF_CLOSE = 'Close'
+DF_OPEN = 'Open'
 DF_VOLUME = 'Volume'
 
 DF_SMOOTH_CLOSE = 'Smooth Adj Close'
 DF_SMOOTH_CHANGE = 'Smooth Rel Change'
 DF_TRUE_CHANGE = 'Rel Change'
 
-TABLE_ALL_TRADE_DATES = 'all-trade-dates'
 
 
 ACTION_BUY = 'buy'

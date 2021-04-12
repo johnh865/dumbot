@@ -8,12 +8,12 @@ import numpy as np
 import pandas as pd
 
 
-from backtest.model import Transactions, SymbolTransactions, TransactionsDF
-from backtest.utils import _delete_attr, dates2days, get_trading_days
-from backtest.utils import interp_const_after
-from backtest.stockdata import StockData, Indicators
-from backtest.exceptions import NoMoneyError, TradingError
-from backtest.definitions import SMALL_DOLLARS
+from backtester.model import Transactions, SymbolTransactions, TransactionsDF
+from backtester.utils import _delete_attr, dates2days, get_trading_days
+from backtester.utils import interp_const_after
+from backtester.stockdata import StockData, Indicators
+from backtester.exceptions import NoMoneyError, TradingError
+from backtester.definitions import SMALL_DOLLARS
 
 class Strategy(metaclass=ABCMeta):
     """Base class for creating trading strategies."""
@@ -46,12 +46,12 @@ class Strategy(metaclass=ABCMeta):
     @abstractmethod
     def init(self):
         """Definite your indicators here."""
-        pass
+        raise NotImplementedError('This method needs to be implemented by user')
     
     @abstractmethod
     def next(self):
         """Define your strategy per iteration here."""
-        pass
+        raise NotImplementedError('This method needs to be implemented by user')
     
     
     def _increment_small_time(self):
