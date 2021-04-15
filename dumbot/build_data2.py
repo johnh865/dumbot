@@ -5,13 +5,13 @@ import pandas as pd
 import backtester
 
 from sqlalchemy import create_engine
-
+from sqlalchemy.exc import OperationalError
 
 from backtester.indicators import TrailingStats
 from backtester.analysis import BuySell, avg_future_growth
 from backtester.stockdata import YahooData, read_yahoo_symbol_names
 from datasets.symbols import ALL
-from backtester.definitions import DF_ADJ_CLOSE
+from backtester.definitions import DF_ADJ_CLOSE, DF_VOLUME
 from backtester import utils
 
 
@@ -26,12 +26,13 @@ def create_data(symbols: list[str]):
     y = YahooData(symbols)
     
     # window_sizes = [5, 10, 15, 20, 30, 40, 50, 60, 80, 100, 150, 200, 400]
+    window_sizes = [5, 10, 20, 60, 100, 200, 600]
     
-    window_sizes = [5, 10, 20, 50, 100, 400]
+    
     window_sizes = np.array(window_sizes)
     max_window = np.max(window_sizes)
     future_growth_window = 20
-    attrs = ['exp_growth', 'rolling_avg',]
+    attrs = ['exp_growth', 'exp_accel', 'exp_reg_diff']
     
     df_dict = {}
     for ii, symbol in enumerate(symbols):
@@ -42,16 +43,24 @@ def create_data(symbols: list[str]):
             print(f'Symbol {symbol} data not available')
         else:            
             series = df[DF_ADJ_CLOSE]
+            series2 = df[DF_VOLUME]
             new = {}
             
             for window in window_sizes:
                 
                 # Get indicators
                 ts = TrailingStats(series, window)
+                ts2 = TrailingStats(series2, window)
+                
                 for attr in attrs:
                     feature = getattr(ts, attr)
-                    name = attr + f'({window})'
+                    name = f'Close({attr}, {window})'
                     new[name] = feature[0 : -future_growth_window]
+                    
+                
+                feature = ts2.lin_reg_value
+                name = f'Volume({window})'
+                new[name] = feature[0 : -future_growth_window]
                     
             
             # Get future growths
@@ -99,12 +108,37 @@ def load_symbol_names():
     return [s.replace('symbol-', '') for s in table_names]
 
 
+
+def create_or_load(symbols: list[str]):
+    engine = create_engine(CONNECTION_PATH, echo=False)
+    df_dict = {}
+    for symbol in symbols:
+        name = 'symbol-' + symbol
+        try:
+            df = pd.read_sql(name, engine)
+        except OperationalError:
+            df = create_data([symbol])[symbol]
+        df_dict[symbol] = df
+    return df_dict
+
+    
+
 if __name__ == '__main__':
     np.random.seed(0)
-    symbols = read_yahoo_symbol_names()
 
-    np.random.shuffle(symbols)
-    symbols = symbols[0:10]
+    symbols = ['SPY', 
+              'GOOG',
+              'MSFT',
+              'AAPL',
+              # 'TSLA',
+              'AIG',
+              'ALK',
+              'GRA',
+              'HAL',
+              'CR',
+              ]
+
+
     df_dict = create_data(symbols)
     save_db(df_dict)
     

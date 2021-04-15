@@ -133,8 +133,8 @@ def test_buy_hold():
     assert np.all(np.isclose(stock_mean, mystrat))
     
     return
-            
-    
+
+
 if __name__ == '__main__':
     test1()
     test2()

@@ -26,7 +26,7 @@ def test_future():
     
     _, growth = avg_future_growth(times, prices, window=20)
 
-
+    plt.figure()
     plt.plot(dates, prices, alpha=.2)
     
     plt.scatter(dates[0 : -20],

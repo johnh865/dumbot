@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine
 
-from stockdata.yahoo import read_yahoo_dataframe
-from stockdata.symbols import SP500, FUNDS
-from stockdata.yahoo.definitions import (
+from datasets.yahoo import read_yahoo_dataframe
+from datasets.symbols import SP500, FUNDS
+from datasets.yahoo.definitions import (
     DF_DATE, CONNECTION_PATH, TABLE_ALL_TRADE_DATES
     )
 

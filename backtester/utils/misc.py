@@ -1,101 +1,18 @@
 # -*- coding: utf-8 -*-
-import datetime
 from typing import Sequence
 from numbers import Number
 
 import numpy as np
 import pandas as pd
 
-from sqlalchemy import create_engine
-from sqlalchemy import MetaData
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import inspect
-
-import logging
-
     
-def _delete_attr(obj, name):
+def delete_attr(obj, name):
     """Try to delete attribute. Used for cleaning up cached_property."""
     try:
         delattr(obj, name)
     except AttributeError:
         pass
     
-    
-    
-
-def get_trading_days(dates : np.ndarray,
-                     date1 : datetime.date, 
-                     date2 : datetime.date=None):
-    """For two dates, get trading days in between."""
-    date1 = np.datetime64(date1)
-    date2 = np.datetime64(date2)
-    
-    if not np.isnat(date1):
-        dates = dates[dates >= date1]
-
-    if not np.isnat(date1):
-        dates = dates[dates <= date2]
-    return dates
-
-
-def drop_table(table_name, *args, **kwargs):
-    """Delete sql table from database"""
-    engine = create_engine(*args, **kwargs)
-    base = declarative_base()
-    metadata = MetaData(engine, reflect=True)
-    table = metadata.tables.get(table_name)
-    if table is not None:
-        logging.info(f'Deleting {table_name} table')
-        base.metadata.drop_all(engine, [table], checkfirst=True)
-        
-        
-def get_table_names(*args, **kwargs):
-    engine = create_engine(*args, **kwargs)
-    insp = inspect(engine)
-    return insp.get_table_names()
-
-    
-def dates2days(dates: np.ndarray):
-    """Convert np.datetime64 to days from start as array[int] ."""
-    tdelta = dates - dates[0]
-    tdelta = tdelta.astype('timedelta64[D]')
-    return tdelta.astype(int)
-
-
-def datetime_np2py(date: np.datetime64):
-    t = np.datetime64(date, 'us').astype(datetime.datetime)
-    return t
-
-
-
-def datetime_to_np(date: datetime.datetime) -> np.array:
-    """Convert a time object/array to numpy datetime64, or numpy array."""
-    
-    # Try to convert a scalar time
-    try:
-        out = np.datetime64(date)
-        
-    # Try to convert array time
-    except ValueError:
-        out = np.asarray(date).astype('datetime64')
-    return out
-    
-
-
-def floor_to_date(date: datetime.datetime):
-    
-    try:
-        date = date.replace(hour=0, minute=0, second=0, microsecond=0)    
-    except AttributeError:
-        date = np.datetime64(date, 'D')        
-    return date
-
-
-def floor_dates(dates: np.ndarray):
-    """Floor dates to day."""
-    return np.asarray(dates).astype('datetime64[D]')
-
 
 def cross(series1: Sequence, series2: Sequence) -> bool:
     """

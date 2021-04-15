@@ -9,39 +9,35 @@ import pandas as pd
 
 
 from backtester.model import Transactions, SymbolTransactions, TransactionsDF
-from backtester.utils import _delete_attr, dates2days, get_trading_days
+from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
 from backtester.stockdata import StockData, Indicators
 from backtester.exceptions import NoMoneyError, TradingError
 from backtester.definitions import SMALL_DOLLARS
 
+SMALL_TIME_SECONDS = 1
+
 class Strategy(metaclass=ABCMeta):
-    """Base class for creating trading strategies."""
+    """Base class for creating trading strategies.
+    Use by creating a new strategy class by inheriting this baseclass. 
+    
+    Then define methods `init` and `next`. 
+    
+    - `init` initializing indicators and other object attributes.
+    - `next` increments the simulation by one trading day. 
+    """
     
     def __init__(self, transactions: Transactions):
         self._transactions = transactions
-        self._indicators = Indicators()        
+        self._indicators = Indicators() 
         self.init()
         
         
-    def _set_data(self, 
-                  date: datetime.datetime,
-                  days_since_start : int):
-        """Set data to use for the current day for used in self.next."""
-        transactions = self._transactions
-        self._date = date   
-        self._days_since_start = days_since_start
+    # def _set_indicators(self, indicators: Indicators=None):
+    #     """Set indicators."""
+    #     if indicators is not None:
+    #         self._indicators = indicators
         
-        # Clean cached property.
-        _delete_attr(self, 'asset_values')
-        _delete_attr(self, 'stock_data')
-
-
-        
-    def _delete_cache(self):
-        _delete_attr(self, 'available_funds')
-        _delete_attr(self, 'asset_values')
-
         
     @abstractmethod
     def init(self):
@@ -50,17 +46,35 @@ class Strategy(metaclass=ABCMeta):
     
     @abstractmethod
     def next(self):
-        """Define your strategy per iteration here."""
-        raise NotImplementedError('This method needs to be implemented by user')
+        """Define your strategy per increment here."""
+        raise NotImplementedError('This method needs to be implemented by user')    
     
+        
+    def _set_data(self, 
+                  date: np.datetime64,
+                  days_since_start : int):
+        """Set data to use for the current day for used in self.next."""
+
+        self._date = date   
+        self._days_since_start = days_since_start
+        
+        # Clean cached property.
+        delete_attr(self, 'asset_values')
+        delete_attr(self, 'stock_data')
+
+        
+    def _delete_cache(self):
+        delete_attr(self, 'available_funds')
+        delete_attr(self, 'asset_values')
+
     
     def _increment_small_time(self):
         """For multiple transactions, increment a tiny amount of time."""
-        self._date += np.timedelta64(1, 's')
+        self._date += np.timedelta64(SMALL_TIME_SECONDS, 's')
         
     
-    
     def buy(self, symbol: str, amount: float):
+        """Buy a dollar amount of an asset during current increment."""
         if amount > self.available_funds + SMALL_DOLLARS:
             raise NoMoneyError('Not enough funds for buy.')
             
@@ -72,7 +86,7 @@ class Strategy(metaclass=ABCMeta):
         
         
     def sell(self, symbol: str, amount: float):
-        """Sell a dollar amount of an asset."""
+        """Sell a dollar amount of an asset during current increment."""
         
         self._delete_cache()
         self._increment_small_time()
@@ -82,7 +96,7 @@ class Strategy(metaclass=ABCMeta):
         
         
     def sell_percent(self, symbol: str, amount: float):
-        """Sell a percentage of an asset."""
+        """Sell a percentage of an asset during current increment."""
         self._delete_cache()
         self._increment_small_time()
         trade = self._transactions.sell_percent(
@@ -92,19 +106,19 @@ class Strategy(metaclass=ABCMeta):
         
     @cached_property
     def available_funds(self):
-        """Available cash for trading."""
+        """Available cash for trading during current increment."""
         return self._transactions.get_available_funds(self._date)
     
     
     @cached_property
     def asset_values(self) -> pd.Series:
-        """Pandas Series of asset value of each traded symbol."""
+        """Pandas Series of asset value of each traded symbol for current increment."""
         return self._transactions.get_asset_values(self._date)
     
     
     @cached_property
     def stock_data(self):
-        """dict[DataFrame] : Dataframes for each symbol."""
+        """dict[DataFrame] : Dataframes for each symbol for the current increment."""
         return self._indicators.stock_data.get_symbols_before(self._date)  
     
     
@@ -113,7 +127,7 @@ class Strategy(metaclass=ABCMeta):
                   *args,
                   name: str=None, 
                   **kwargs) -> "_IndicatorValue":
-        """Create an indicator and return a `_IndicatorValue
+        """Create an indicator and return a `_IndicatorValue.
 
         Parameters
         ----------
@@ -133,7 +147,7 @@ class Strategy(metaclass=ABCMeta):
         -------
         _IndicatorValue
             Object used to retrieve indicator values in `self.next` for
-            each stock symbol.
+            each stock symbol. For example:
             
             .. code-block :: python
                         
@@ -145,7 +159,6 @@ class Strategy(metaclass=ABCMeta):
                     value = self.my_indicator(symbol)
 
         """
-        """Create an indicator and return a `_IndicatorValue`."""
         name = self._indicators.create(func, *args, name=name, **kwargs)
         return _IndicatorValue(
             name=name,
@@ -155,12 +168,15 @@ class Strategy(metaclass=ABCMeta):
     
     @property
     def date(self):
+        """The date of the current simulation increment."""
         return self._date
     
     
     @property
     def days_since_start(self):
+        """Days since the beginning of simulation for the current simulation increment."""
         return self._days_since_start
+
     
     
 class _IndicatorValue:
@@ -174,22 +190,52 @@ class _IndicatorValue:
         self.strategy = strategy
         
         
-    def __call__(self, symbol):
+    def __call__(self, symbol: str):
         """Retrieve indicator value for given symbol."""
         date = self.strategy.date
-        return self.indicators.get_before(symbol, self.name, date)
+        dict1 = self.indicators.get_dict_before(symbol, date)
+        return dict1[self.name]
     
 
 class Backtest:
-    """Main testing component to test and run strategies."""
+    """Main testing component to test and run strategies.
+
+    Parameters
+    ----------
+    stock_data : StockData
+        Stock data.
+    strategy : Strategy class
+        Strategy class. Do not instantiate. 
+    cash : float, optional
+        Starting balance. The default is 1.0.
+    commission : float, optional
+        Fee ratio of each transaction from [0 to 1]. The default is 0.
+    start_date : np.datetime64, optional
+        Simulation start date. The default is None.
+    end_date : np.datetime64, optional
+        Simulation end date. The default is None.
+        
+        
+    Attributes
+    ----------
+    active_days : np.ndarray[np.datetime64]
+        Days in which to actively trade
+    transations : Transactions
+        Transactions generation object
+    stats : BacktestStats
+        Performance, balance, and transaction summary and statistics. 
+
+            
+            """
     def __init__(self,
             stock_data: StockData,
             strategy: Strategy,
             cash: float = 1.0,
             commission: float = .0,
-            start_date: datetime.date = None,
-            end_date: datetime.date = None
+            start_date: np.datetime64 = None,
+            end_date: np.datetime64 = None,
             ):
+
         self.stock_data = stock_data
         self.transactions = Transactions(
             stock_data = stock_data,
@@ -197,6 +243,7 @@ class Backtest:
             commission = commission
         )
         self.strategy = strategy(self.transactions)
+        
         self.start_date = start_date
         self.end_date = end_date
         
@@ -213,7 +260,6 @@ class Backtest:
     
     def start(self):
         self.strategy : Strategy
-        self.strategy._indicators.set_stock_data(self.stock_data)
         self.strategy.init()
         self.transactions.hold(self.active_days[0])
         
@@ -223,7 +269,11 @@ class Backtest:
                 days_since_start = self._time_int[ii]
                 )
             self.strategy.next()
-        self.transactions.hold(self.active_days[-1])
+            
+        final_day = self.active_days[-1]
+        final_day += np.timedelta64(SMALL_TIME_SECONDS, 's')
+        self.transactions.hold(final_day)
+        
         self.stats = BacktestStats(self)
         
 

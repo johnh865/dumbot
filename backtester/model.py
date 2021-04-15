@@ -21,10 +21,10 @@ from backtester.definitions import (ACTION_BUY, ACTION_SELL, ACTION_DEPOSIT,
                                 ACTION_SELL_PERCENT)
 from backtester.definitions import SMALL_DOLLARS
 
-from stockdata.symbols import ALL
+from datasets.symbols import ALL
 from backtester.stockdata import StockData
 from backtester.utils import dates2days, floor_to_date
-from backtester.utils import interp_const_after, _delete_attr
+from backtester.utils import interp_const_after, delete_attr
 from backtester.exceptions import NoMoneyError, TradingError
 from backtester import utils
 
@@ -405,7 +405,7 @@ class SymbolTransactions:
     
     
     def execute(self):
-        _delete_attr(self, 'dataframe')
+        delete_attr(self, 'dataframe')
         while self.queue:
             self._execute_one()            
 
@@ -578,8 +578,8 @@ class Transactions:
     
         
     def execute(self):
-        _delete_attr(self, 'dataframe')
-        _delete_attr(self, 'asset_history')
+        delete_attr(self, 'dataframe')
+        delete_attr(self, 'asset_history')
         
         while self.queue:
             self._execute_one()            
@@ -618,15 +618,17 @@ class Transactions:
         sdict = self._get_symbol_transactions_dict()
         actions = self.executed_actions
         balances = self.balances
+
+        dates = np.array([a.date for a in actions])
+        equity = np.array([b.available_funds for b in balances])
         
-        for action, balance in zip(actions, balances):
-            date = action.date
-            equity = balance.available_funds
-            
-            for s_transaction in sdict.values():
-                equity += s_transaction.get_share_valuation(date)
         
-            balance.equity = equity
+        for s_transaction in sdict.values():
+            values = s_transaction.get_share_valuation(dates)
+            equity = equity + values
+
+        for ii, balance in enumerate(balances):
+            balance.equity = equity[ii]
         return
     
     

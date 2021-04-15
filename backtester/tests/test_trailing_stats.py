@@ -3,9 +3,9 @@ import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 
-from backtester.indicators import TrailingStats
+from backtester.indicators import TrailingStats, array_windows
 from backtester.definitions import DF_ADJ_CLOSE, DF_VOLUME, DF_HIGH, DF_LOW
-from stockdata.symbols import ALL
+from datasets.symbols import ALL
 from backtester.stockdata import YahooData
 
 
@@ -28,9 +28,9 @@ def test1():
     y = YahooData([symbols[0]])
     df = y.get_symbol_all(symbols[0])
     
-    df1 = df.iloc[-600:]
+    df1 = df.iloc[-50:]
     series = df1[DF_ADJ_CLOSE]
-    window_size = 51
+    window_size = 21
     ts = TrailingStats(series, window_size)
     
     
@@ -96,8 +96,8 @@ def test_trailing_avg():
     symbol = 'VOO'
     y = YahooData([symbol])
     df = y.get_symbol_all(symbol)    
-    series = df[DF_ADJ_CLOSE]
-    window = 101
+    series = df[DF_ADJ_CLOSE].iloc[-100:]
+    window = 21
     ts = TrailingStats(series, window)
 
     avgs = []
@@ -122,7 +122,7 @@ def test_close_intervals():
     
     symbol = 'VOO'
     y = YahooData([symbol])
-    df = y.get_symbol_all(symbol)    
+    df = y.get_symbol_all(symbol).iloc[-400:]
     series = df[DF_ADJ_CLOSE]
 
     window_size = 11
@@ -136,7 +136,33 @@ def test_close_intervals():
     assert np.all(np.isclose(interval, correct))
     
 
-
+def test_intervals():
+    
+    def _time_days_int_intervals(times, window_size):
+        """Test WITHOUT NUBMA. Construct time intervals for windowing."""
+        tnum = len(times) - window_size
+        intervals = []
+        for ii in range(tnum):
+            interval = times[ii : ii + window_size]
+            intervals.append(interval)
+        return intervals
+    
+    
+    times = np.linspace(1, 100, 10000)
+    window_size = 20
+    _ = array_windows(times, window_size)
+    
+    def test1():
+        return array_windows(times, window_size)
+    
+    def test2():
+        return _time_days_int_intervals(times, window_size)
+    
+    time1 = timeit.timeit(test1, number=1000)
+    time2 = timeit.timeit(test2, number=1000)
+    print('Numba interval sped = ', time1)
+    print('Python interval sped = ', time2)
+    assert time1 < time2
 
 
 
@@ -145,4 +171,5 @@ if __name__ == '__main__':
     test1()
     test_trailing_avg()
     test_close_intervals()
+    test_intervals()
 

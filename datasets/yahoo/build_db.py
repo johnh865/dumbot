@@ -5,12 +5,10 @@
 import yfinance as yf   
 from sqlalchemy import create_engine
 
-from stockdata.yahoo.definitions import CONNECTION_PATH, TABLE_SYMBOL_PREFIX
+from datasets import symbols
+from datasets.yahoo.definitions import CONNECTION_PATH, TABLE_SYMBOL_PREFIX
 from backtester import utils
-# stock_data = yf.download(stock_symbol,'2016-01-01','2021-03-01') 
 
-
-from stockdata import symbols
 SYMBOLS = symbols.ALL
 
 
@@ -27,11 +25,8 @@ def retrieve_symbols(symbols: list[str]):
         df = yf.download(symbol, start=start_date)
         
         name = TABLE_SYMBOL_PREFIX + symbol
-        df.to_sql(name, con=engine, if_exists='append')
+        df.to_sql(name, con=engine, if_exists='replace')
         
-
-def drop_table(name):
-    utils.drop_table(name, CONNECTION_PATH, echo=False)
     
     
 if __name__ == '__main__':

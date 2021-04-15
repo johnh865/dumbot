@@ -11,3 +11,6 @@ pytest
 numba
 spyder=4.2.5
 bs4
+
+# Machine learning stuff
+sklearn

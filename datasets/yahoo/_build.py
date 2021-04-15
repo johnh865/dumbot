@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from stockdata import symbols
-from stockdata.yahoo.build_db import retrieve_symbols
-from stockdata.yahoo.build_trade_dates import build_trade_dates
+from datasets import symbols
+from datasets.yahoo.build_db import retrieve_symbols
+from datasets.yahoo.build_trade_dates import build_trade_dates
 
 
 def build():

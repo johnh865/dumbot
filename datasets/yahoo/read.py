@@ -6,9 +6,9 @@ from sqlalchemy import inspect
 
 import pandas as pd
 
-from stockdata.symbols import ALL
-from stockdata.yahoo.definitions import CONNECTION_PATH
-from stockdata.yahoo.definitions import (
+from datasets.symbols import ALL
+from datasets.yahoo.definitions import CONNECTION_PATH
+from datasets.yahoo.definitions import (
     DF_DATE,
     TABLE_ALL_TRADE_DATES,
     TABLE_SYMBOL_PREFIX,
@@ -17,16 +17,21 @@ from stockdata.yahoo.definitions import (
 
 engine = create_engine(CONNECTION_PATH, echo=False)
 
-@lru_cache(maxsize=500)
 def read_yahoo_dataframe(symbol: str) -> pd.DataFrame:
     """Read all available stock symbol Yahoo data."""
-    dataframe = pd.read_sql(symbol, engine).set_index(DF_DATE, drop=True)
+    name = TABLE_SYMBOL_PREFIX + symbol
+    dataframe = pd.read_sql(name, engine).set_index(DF_DATE, drop=True)
     return dataframe
 	
 
-def read_yahoo_tablenames() -> list[str]:
+def read_yahoo_symbol_names() -> list[str]:
     insp = inspect(engine)
-    return insp.get_table_names()
+    tables = insp.get_table_names() 
+    new = []
+    for table_name in tables:
+        if table_name.startswith(TABLE_SYMBOL_PREFIX):
+            new.append(table_name.replace(TABLE_SYMBOL_PREFIX, ''))
+    return new
 
 
 def read_yahoo_trade_dates() -> pd.DataFrame:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """Get list of stock symbol strings."""
-from stockdata.definitions import PACKAGE_PATH
+from datasets.definitions import PACKAGE_PATH
 from os.path import join
 
 __all__ = ['SP500', 'FUNDS', 'ALL']
