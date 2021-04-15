@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import pdb
 import pandas as pd
 import numpy as np
 
@@ -25,14 +26,14 @@ from sklearn.model_selection import train_test_split, TimeSeriesSplit
 # %% Load data
 stocks = ['SPY', 
           'GOOG',
-          'MSFT',
-          'AAPL',
-          # 'TSLA',
-          'AIG',
-          'ALK',
-          'GRA',
-          'HAL',
-          'CR',
+          # 'MSFT',
+          # 'AAPL',
+          # # 'TSLA',
+          # 'AIG',
+          # 'ALK',
+          # 'GRA',
+          # 'HAL',
+          # 'CR',
           ]
 
 
@@ -87,7 +88,7 @@ def train(features, targets, reg):
 
 
 
-def load_ml_data(dummy):
+def load_ml_data():
     return features.values, targets.values
 
     
@@ -106,6 +107,7 @@ class Strat1(Strategy):
     
     def next(self):
         # Train every XX days 
+        pdb.set_trace()
         features, targets = self.ml_data(stocks[0])
                 
         if (self.ii) % 100 == 0:

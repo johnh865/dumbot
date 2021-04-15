@@ -256,18 +256,34 @@ class Indicators(BaseData):
         self._locked = True
         df = self.stock_data.get_symbol_all(symbol)
         df2 = df[[]].copy()
+        df_len = len(df.index)
+        
+        def check_len(value, name_):
+            vlen = len(value)
+            if vlen != df_len:
+                raise ValueError(
+                    f'Indicator {name_} length {vlen} does not match '
+                    f'stock_data length {df_len} for current increment '
+                    f'for symbol {symbol}.')
                
         for name, idata in self._indicators.items():
             (func, args, kwargs) = idata
-            value = func(*args, df=df, **kwargs)
+            try:
+                value = func(*args, df=df, **kwargs)
+            except TypeError:
+                value = func(*args, **kwargs)
+                
+                
             if type(value) == tuple:
                 for jj, v in enumerate(value):
                     name2 = name + f'[{jj}]'
+                    check_len(v, name2)
                     df2[name2] = v
                     
             elif issubclass(dict, type(value)):
                 for key, v in value.items():
                     name2 = name + f'["{key}"]'
+                    check_len(v, name2)
                     df2[name2] = v
             else:
                 df2[name] = value

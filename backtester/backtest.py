@@ -266,6 +266,7 @@ class Backtest:
     
     def start(self):
         self.strategy : Strategy
+        self.strategy._indicators.set_stock_data(self.stock_data)
         self.strategy.init()
         self.transactions.hold(self.active_days[0])
         
