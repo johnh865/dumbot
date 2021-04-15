@@ -5,12 +5,10 @@ import numpy as np
 from backtester import Strategy, Backtest
 from backtester.indicators import TrailingStats
 from backtester.definitions import DF_ADJ_CLOSE
-from backtester.stockdata import YahooData
+from backtester.stockdata import YahooData, DictData
 
 
 from dumbot.build_data2 import load_db, load_symbol_names
-
-
 from dumbot.build_data2 import create_data
 
 import datetime
@@ -39,6 +37,7 @@ stocks = ['SPY',
 
 
 data_dict = create_data(stocks)
+stock_data = DictData(data_dict)
 
 # %%
 df = pd.concat(data_dict.values())
@@ -59,7 +58,7 @@ def process(df: pd.DataFrame) -> (pd.DataFrame, pd.Series):
 
 
 features, targets = process(df)
-
+feature_names = features.keys()
 
 # %% Machine learning
 reg = RandomForestRegressor()
@@ -91,8 +90,6 @@ def train(features, targets, reg):
 def load_ml_data(dummy):
     return features.values, targets.values
 
-
-def get_indicators(df: pd.DataFrame):
     
 # %% Strategy & Performance
 
@@ -100,20 +97,44 @@ class Strat1(Strategy):
     
     def init(self):
         self.reg = RandomForestRegressor()
-        
-        self.ml_data = self.indicator(load_data)
+        self.feature_names = feature_names
+        self.ml_data = self.indicator(load_ml_data)
         self.ii = 0
+        self.current_stock = ''
         return
     
     
     def next(self):
         # Train every XX days 
-        features, targets = self.datas(stocks[0])
-        
-        if (self.ii + 1) % 100 == 0:
+        features, targets = self.ml_data(stocks[0])
+                
+        if (self.ii) % 100 == 0:
+            print('start training.')
             self.reg.fit(features, targets)
+            score = self.reg.score(features, targets)
+            print('training score = ', score)
             
-        future_growth = self.reg.predict(features[-1:])
+        growths = []
+        for stock in stocks:
+            indicators = self.stock_data[stock][self.feature_names].values
+            indicators = indicators[-1:]
+            future_growth = self.reg.predict(indicators)
+            growths.append(future_growth)
+        imax = np.argmax(growths)
+        my_growth = growths[imax]
+        my_stock = stock[imax]
+        
+        
+        if my_growth < 0:
+            self.sell_percent(self.current_stock, amount=1.0)        
+        else:
+            if my_stock != self.current_stock:
+                self.sell_percent(self.current_stock, amount=1.0)
+                action = self.buy(my_stock, self.available_funds)
+                self.current_stock = my_stock
+                print(action)
+      
+            
         return
     
     

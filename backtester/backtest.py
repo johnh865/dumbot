@@ -11,7 +11,7 @@ import pandas as pd
 from backtester.model import Transactions, SymbolTransactions, TransactionsDF
 from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
-from backtester.stockdata import StockData, Indicators
+from backtester.stockdata import BaseData, Indicators
 from backtester.exceptions import NoMoneyError, TradingError
 from backtester.definitions import SMALL_DOLLARS
 
@@ -136,6 +136,13 @@ class Strategy(metaclass=ABCMeta):
             using keyword argument `df`:
                 
             >>> value = func(*args, df=df, **kwargs)
+            
+            df : pd.DataFrame
+                Pandas dataframe of data retrieved from `StockData` object
+                found in `Backtest`.
+            value : dict or np.ndarray
+                Indicator values for each row of dataframe. 
+            
         *args : 
             Positional arguments for `func`.
         name : str, optional
@@ -202,7 +209,7 @@ class Backtest:
 
     Parameters
     ----------
-    stock_data : StockData
+    stock_data : BaseData
         Stock data.
     strategy : Strategy class
         Strategy class. Do not instantiate. 
@@ -228,7 +235,7 @@ class Backtest:
             
             """
     def __init__(self,
-            stock_data: StockData,
+            stock_data: BaseData,
             strategy: Strategy,
             cash: float = 1.0,
             commission: float = .0,
@@ -243,7 +250,6 @@ class Backtest:
             commission = commission
         )
         self.strategy = strategy(self.transactions)
-        
         self.start_date = start_date
         self.end_date = end_date
         

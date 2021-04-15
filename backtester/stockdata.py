@@ -116,8 +116,8 @@ class BaseStockData(BaseData):
         
         
     
-class StockData(BaseStockData):
-    def __init__(self, d: Union(dict[pd.DataFrame], BaseData)):
+class DictData(BaseData):
+    def __init__(self, d: Union[dict[pd.DataFrame], BaseData]):
         
         if hasattr(d, 'get_all'):
             self.dict = d.get_all()
@@ -178,7 +178,7 @@ class Indicators(BaseData):
         Eventually to generate indicators, you must assign self.stock_data.
     """
     
-    def __init__(self, stock_data: StockData=None):
+    def __init__(self, stock_data: BaseData=None):
         """
 
 
@@ -194,7 +194,7 @@ class Indicators(BaseData):
         return self.stock_data.get_symbol_names()
 
 
-    def set_stock_data(self, stock_data: StockData):
+    def set_stock_data(self, stock_data: BaseData):
         """Set stock data."""
         self.stock_data = stock_data
 
@@ -286,20 +286,7 @@ class Indicators(BaseData):
     
 
 
-class IndicatorsPreCalc(StockData, Indicators):
-    """Precalculated indicators that retrieve column data from dict[DataFrame]."""
 
-    
-    def __init__(self, stock_data: StockData=None):
-        
-        self.stock_data = stock_data
-        self._indicators = {}
-        self._class_indicators = {}
-        self._locked = False    
-        
-        
-    def create(self, column: str):
-        return column
     
     
 

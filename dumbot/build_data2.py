@@ -73,6 +73,7 @@ def create_data(symbols: list[str]):
             
             new['avg_future_growth'] = growths
             new['date'] = dates
+            new[DF_ADJ_CLOSE] = series.values[0 : -future_growth_window]
             
             df_new = pd.DataFrame(new)
             

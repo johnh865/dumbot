@@ -22,7 +22,7 @@ from backtester.definitions import (ACTION_BUY, ACTION_SELL, ACTION_DEPOSIT,
 from backtester.definitions import SMALL_DOLLARS
 
 from datasets.symbols import ALL
-from backtester.stockdata import StockData
+from backtester.stockdata import BaseData
 from backtester.utils import dates2days, floor_to_date
 from backtester.utils import interp_const_after, delete_attr
 from backtester.exceptions import NoMoneyError, TradingError
@@ -161,16 +161,17 @@ class SymbolTransactions:
     """Store and process trades for a particular symbol."""
     def __init__(self, 
                  symbol: str, 
-                 stock_data: StockData,
-                 actions: list[Action]=[], 
+                 stock_data: BaseData,
+                 actions: list[Action]=(), 
                  commission=0.0,
+                 close_name: str=DF_ADJ_CLOSE
                  ):
         """        
         Parameters
         ----------
         symbol : str
             Stock ticker symbol.
-        stock_data : StockData
+        stock_data : BaseData
             StockData.
         actions : list[Action], optional
             Initial trade actions. The default is [].
@@ -179,6 +180,7 @@ class SymbolTransactions:
 
         """
         
+        self.close_name = close_name
         self.symbol = symbol
         self.commission = commission
         self.queue = deque(actions)
@@ -201,9 +203,7 @@ class SymbolTransactions:
     
     def get_previous_trading_date(self, date: np.ndarray):
         """Get previous trading date from current `date`."""
-        dates0 = utils.floor_dates(date)
-        
-        
+        dates0 = utils.floor_dates(date)        
         dates = self.df.index 
         ii = np.searchsorted(dates, dates0)
         return dates[ii - 1]
@@ -242,7 +242,7 @@ class SymbolTransactions:
         """Get next close (adjusted) price given `date`."""
         next_dates = self.get_next_trading_date(date)
         dates = self.df.index
-        values = self.df[DF_ADJ_CLOSE]        
+        values = self.df[self.close_name]        
         return interp_const_after(dates, values, next_dates)
     
     
@@ -261,7 +261,7 @@ class SymbolTransactions:
                 )
             return self._get_next_close(date1)
         
-        return out[DF_ADJ_CLOSE], date    
+        return out[self.close_name], date    
     
    
     
@@ -312,19 +312,13 @@ class SymbolTransactions:
         date = floor_to_date(date)
         
         out = self.df.loc[date]
-
-        # close = out[DF_CLOSE]
-        adj_close = out[DF_ADJ_CLOSE]
-        # ratio = adj_close / close
-        # high = out[DF_HIGH]
-        # low = out[DF_LOW]
-        # return (high + low) / 2.0 * ratio
+        adj_close = out[self.close_name]
         return adj_close 
     
     
     def get_adj_price(self, date: np.ndarray) -> np.ndarray:
         """Estimate the price of the stock if bought in the date."""
-        close = self.df[DF_ADJ_CLOSE]
+        close = self.df[self.close_name]
         times = self.df.index
         return interp_const_after(times, close, date)
     
@@ -461,7 +455,7 @@ class SymbolTransactions:
 class Transactions:
     """Store and process stock transactions."""
     def __init__(self, 
-                 stock_data: StockData, 
+                 stock_data: BaseData, 
                  init_funds=0, 
                  actions: list[Action]=None, 
                  commission=0.0
@@ -632,11 +626,11 @@ class Transactions:
         return
     
     
-    def last_equity(self):
-        try:
-            return self.balances[-1].net_assets
-        except IndexError:
-            return self.init_funds
+    # def last_equity(self):
+    #     try:
+    #         return self.balances[-1].net_assets
+    #     except IndexError:
+    #         return self.init_funds
         
         
     def get_asset_values(self, date: datetime.datetime) -> pd.Series:
@@ -681,11 +675,11 @@ class Transactions:
         return balance2.available_funds        
         
         
-    def last_available_funds(self):
-        try:
-            return self.balances[-1].available_funds
-        except IndexError:
-            return self.init_funds
+    # def last_available_funds(self):
+    #     try:
+    #         return self.balances[-1].available_funds
+    #     except IndexError:
+    #         return self.init_funds
         
     @cached_property
     def dataframe(self) -> pd.DataFrame:
