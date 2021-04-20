@@ -1,5 +1,5 @@
 import datetime
-from functools import lru_cache
+from functools import lru_cache, cached_property
 from abc import abstractmethod, ABCMeta
 from typing import Callable
 from typing import Union
@@ -13,16 +13,23 @@ from datasets.yahoo import (
     read_yahoo_symbol_names,
     read_yahoo_trade_dates,
     )
+from backtester.exceptions import DataError
 
-
-class _SymbolData:
+class TableData:
     """Methods to retrieve symbol data faster."""
     def __init__(self, df: pd.DataFrame):
         df = df.sort_index()
         self.times = df.index
         self.df = df
         self.values = df.values
-        self.names = df.columns.values.astype(str)
+        try:
+            self.names = df.columns.values.astype(str)
+        except AttributeError:
+            self.names = [df.name]
+            
+        self._min_date = np.min(self.times)
+        self._max_date = np.max(self.times)
+        
         
     def dataframe_before(self, date: np.datetime64):
         ii = np.searchsorted(self.times, date)
@@ -41,6 +48,14 @@ class _SymbolData:
         ii = np.searchsorted(self.times, date)
         return self.values[0 : ii]
     
+    
+    def exists_at(self, date: np.datetime64) -> bool:
+        """Check existence of data for the given time. True if within 
+        min and max dates in `self.times`."""
+        if self._min_date < date <= self._max_date:
+            return True
+        return False
+    
 
 class BaseData(metaclass=ABCMeta):
     @abstractmethod
@@ -49,9 +64,35 @@ class BaseData(metaclass=ABCMeta):
         
 
     @abstractmethod
-    def get_symbol_names(self) -> list:
+    def get_symbol_names(self) -> list[str]:
         """Get all available symbols."""
         raise NotImplementedError('This method needs to be implemented by user')
+        
+        
+    def existing_symbols(self, date: np.datetime64) -> list[str]:
+        """Sometimes data will not be available for certain dates. Retrieve
+        the symbols that exist for a given time."""
+        names = self.get_symbol_names()
+        out = []
+        for name in names:
+            table = self._get_symbol_data(name)
+            if table.exists_at(date):
+                out.append(name)
+        return out
+    
+    
+    def unlisted_symbols(self, date: np.datetime64) -> list[str]:
+        """Sometimes data will not be available for certain dates. Retrieve
+        the symbols that DO NOT exist for a given time."""    
+        names = self.get_symbol_names()
+        out = []
+        for name in names:
+            table = self._get_symbol_data(name)
+            if not table.exists_at(date):
+                out.append(name)
+        return out
+
+
         
     @abstractmethod
     def retrieve_symbol(self, symbol: str) -> pd.DataFrame:
@@ -59,11 +100,11 @@ class BaseData(metaclass=ABCMeta):
         raise NotImplementedError('This method needs to be implemented by user')
         
         
-    @lru_cache(maxsize=500)
-    def _get_symbol_data(self, symbol: str) -> _SymbolData:
+    @lru_cache(maxsize=1000)
+    def _get_symbol_data(self, symbol: str) -> TableData:
         """Construct SymbolData."""
         df = self.retrieve_symbol(symbol)
-        return _SymbolData(df)
+        return TableData(df)
             
         
     def get_symbol_all(self, symbol:str) -> pd.DataFrame:
@@ -84,6 +125,15 @@ class BaseData(metaclass=ABCMeta):
         for symbol in symbols:
             out[symbol] = self.get_symbol_before(symbol, date)
         return out
+
+    
+    def __getitem__(self, symbol: str):
+        return self._get_symbol_data(symbol).df
+    
+    
+
+            
+    
     
     
     # def get_before(self, symbol: str, name: str, date: np.datetime64):
@@ -115,6 +165,28 @@ class BaseStockData(BaseData):
         raise NotImplementedError('This method needs to be implemented by user')
         
         
+    # @cached_property
+    # def _existence_df(self):
+    #     """Get trade dates where symbol exists or not."""
+    #     dates = self.get_trade_dates()
+    #     symbols = self.get_symbol_names()
+        
+    #     new = np.zeros((len(dates), len(symbols)), dtype=bool)
+        
+    #     for jj, symbol in enumerate(symbols):
+    #         df = self.retrieve_symbol(symbol)
+    #         sdates = df.index.values
+    #         ii = np.searchsorted(dates, sdates)
+            
+    #         assert np.all(dates[ii] == sdates)
+    #         new[ii, jj] = True
+            
+    #     return pd.DataFrame(data=new, index=dates, columns=symbols)
+    
+
+            
+            
+        
     
 class DictData(BaseData):
     def __init__(self, d: Union[dict[pd.DataFrame], BaseData]):
@@ -138,7 +210,7 @@ class YahooData(BaseStockData):
     """Retrieve data from Yahoo online dataset."""
     def __init__(self, symbols=()):
         if len(symbols) == 0:
-            symbols = read_yahoo_symbol_names()
+            symbols = read_yahoo_symbol_names(only_good=True)
         self._symbols = symbols
         return
     

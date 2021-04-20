@@ -6,37 +6,80 @@ from numba import njit
 import pandas as pd
 import numpy as np
 from scipy.stats import linregress
+from backtester.exceptions import NotEnoughDataError
 
-from backtester.definitions import DF_ADJ_CLOSE
-
-
-def moving_avg(period, df: pd.DataFrame):
-    close = df[DF_ADJ_CLOSE]
-    return close.rolling(period).mean()
     
 @njit
-def array_windows(x: np.ndarray, window: np.int64):
-    """Construct 2-d array for with a window interval for each x."""
+def array_windows(x: np.ndarray, window: np.int64) -> np.ndarray:
+    """Construct 2-d array for with a window interval for each x.
     
-    tnum = len(x) - window
+    Parameters
+    ----------
+    x : np.ndarray shape (a,)
+        Array to construct windows.
+    window : np.int64
+        Size of window.
+
+    Returns
+    -------
+    intervals : np.ndarray shape (a, b)
+        Intervals of x.
+
+    Raises
+    ------
+    backtester.exceptions.NotEnoughDataError
+        Raise if window is larger than len(x).
+    """
+    xlen = len(x)
+    tnum = xlen - window
+    if tnum < 1:
+        raise NotEnoughDataError('Window size is greater than length x')
+    
     intervals = np.zeros((tnum, window))
     for ii in range(tnum):
         intervals[ii] = x[ii : ii + window]
     return intervals
-        
 
-class TrailingStats:
-    def __init__(self, series : pd.Series, window_size : int, indicators=()):
+
+def append_nan(arr, window: int):
+    nans = np.empty(window)
+    nans[:] = np.nan
+    return np.append(nans, arr)        
+
+
+def trailing_percentiles(x: np.ndarray, window: np.int64):
+    """Get percentile distributions from [ 0 to 100] for each value in x."""
+    intervals = array_windows(x, window)
+    tnum = len(intervals)
+    out = np.zeros(tnum)
+    pbins = np.arange(100)    
+    
+    for ii, interval in enumerate(intervals):
+        percentiles = np.nanpercentile(interval, pbins)
+        out[ii] = np.interp(interval[-1], percentiles, pbins)
+    return append_nan(out, window)
+
+
+class TrailingBase:
+    def __init__(self, series : pd.Series, window_size : int):
         self.window_size = np.int64(window_size)
         self.series = series   
-        self.indicators = indicators
         
-                
+        
+    @cached_property
+    def times(self) -> np.ndarray:
+        """Associated times for output properties."""
+        return self.series.index.values[0 : -self.window_size]
+        
+
     @cached_property
     def time_days_int(self):
         """Return time in days as array[int] from start day."""
         tdelta = self.series.index - self.series.index[0]
-        tdelta = tdelta.astype('timedelta64[D]')
+        try:
+            tdelta = tdelta.astype('timedelta64[D]')
+        except TypeError:
+            pass
         return tdelta
     
     
@@ -45,6 +88,15 @@ class TrailingStats:
         nans = np.empty(self.window_size)
         nans[:] = np.nan
         return np.append(nans, arr)        
+    
+    
+    @staticmethod
+    def _append_nan_dec(func):
+        """Decorator to append np.nan to beginning of the array."""
+        def func2(self):
+            output = func(self)
+            return self._append_nan(output)
+        return func2
     
     
     @cached_property
@@ -62,7 +114,18 @@ class TrailingStats:
         values = self.series.values
         return array_windows(values, self.window_size)
     
-    
+
+class TrailingStats(TrailingBase):
+    """Calculate trailing statistics for a window of time. 
+
+    Parameters
+    ----------
+    series : pd.Series
+        times and values.
+    window_size : int
+        Size of window.
+    """
+
     def _regression(self, x, y):
         x = np.asarray(x)
         xmean = np.mean(x, axis=1)
@@ -75,7 +138,6 @@ class TrailingStats:
         
         m = ss_xy / ss_xx
         b = ymean - m * xmean
-        
         
         m = self._append_nan(m)
         b = self._append_nan(b)
@@ -159,10 +221,11 @@ class TrailingStats:
     
     
     @cached_property
+    @TrailingBase._append_nan_dec
     def rolling_avg(self):
         arr = np.asarray(self._adj_close_intervals)
         smoothed = np.mean(arr, axis=1)
-        return self._append_nan(smoothed)
+        return smoothed
     
     
     @property
@@ -208,15 +271,51 @@ class TrailingStats:
         
     
     @cached_property
+    @TrailingBase._append_nan_dec
     def exp_std_dev(self):
         """Standard deviation of window considering exponential fit.
         Try to measure volatility."""
         
-        y_reg = self.exp_reg_value[:, None]
+        y_reg = self.exp_reg_value[self.window_size :, None]
         y_intervals = self._adj_close_intervals
         delta = y_intervals - y_reg
         return np.std(delta, axis=1)
+    
+    
+    @cached_property
+    @TrailingBase._append_nan_dec
+    def max_loss(self):
+        """Max loss of current day considering previous days."""
+        closes = self._adj_close_intervals
+        maxes = np.max(closes, axis=1)
+        last = closes[:, -1]
+        return (maxes - last) / maxes
+    
+    
+    
+    @cached_property
+    @TrailingBase._append_nan_dec
+    def max_gain(self):
+        """Max loss of current day considering previous days."""
+        closes = self._adj_close_intervals
+        mins = np.min(closes, axis=1)
+        last = closes[:, -1]
+        return (last - mins) / mins    
 
+
+class FutureStats(TrailingStats):
     
+        
+        
+    @cached_property
+    def times(self) -> np.ndarray:
+        """Associated times for output properties."""
+        return self.series.index.values[self.window_size :]
     
+    def _append_nan(self, arr):
+        """Append nan to beginning of array for window."""
+        nans = np.empty(self.window_size)
+        nans[:] = np.nan
+        return np.append(arr, nans)        
     
+       

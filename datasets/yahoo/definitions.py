@@ -16,4 +16,6 @@ DF_VOLUME = 'Volume'
 
 # Table name for avaible trade dates
 TABLE_ALL_TRADE_DATES = 'all-trade-dates'
+TABLE_GOOD_SYMBOL_DATA = 'good-symbol-list'
+
 TABLE_SYMBOL_PREFIX = 'symbol-'

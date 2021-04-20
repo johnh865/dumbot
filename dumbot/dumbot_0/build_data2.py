@@ -27,11 +27,10 @@ def create_data(symbols: list[str]):
     
     # window_sizes = [5, 10, 15, 20, 30, 40, 50, 60, 80, 100, 150, 200, 400]
     window_sizes = [5, 10, 20, 60, 100, 200, 600]
-    
+    future_growth_window = 200
     
     window_sizes = np.array(window_sizes)
     max_window = np.max(window_sizes)
-    future_growth_window = 20
     attrs = ['exp_growth', 'exp_accel', 'exp_reg_diff']
     
     df_dict = {}
@@ -79,6 +78,10 @@ def create_data(symbols: list[str]):
             
             # Chop of NAN due to the largest window
             df_new = df_new.iloc[max_window :]
+            
+            # Set date to indx
+            df_new = df_new.set_index('date')
+            
             df_dict[symbol] = df_new
     return df_dict
         

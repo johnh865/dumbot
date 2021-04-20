@@ -1,3 +1,5 @@
+"""Simple bot that picks stocks with good average previous growth.
+It works OK. Has potential."""
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
@@ -20,15 +22,15 @@ def under_value(window_size, df: pd.DataFrame):
     return -t.exp_reg_diff
 
 stocks = ['SPY', 
-          'GOOG',
-          'MSFT',
-          'AAPL',
-          # 'TSLA',
-          'AIG',
-          'ALK',
-          'GRA',
-          'HAL',
-          'CR',
+          # 'GOOG',
+           'MSFT',
+          # 'AAPL',
+          # # 'TSLA',
+          # 'AIG',
+          # 'ALK',
+          # 'GRA',
+          # 'HAL',
+          # 'CR',
           ]
 
 

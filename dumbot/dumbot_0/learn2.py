@@ -3,15 +3,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from backtester.utils import get_table_names
 from dumbot.definitions import CONNECTION_PATH
-from dumbot.build_data import load_db, load_symbol_names
+from dumbot.build_data2 import load_db
 
 # %% load & process features & targets
 
 def load():
-    symbols = load_symbol_names()
-    symbols = ['DIS']
+    symbols = ['GOOG']
     d = load_db(symbols)
     df = pd.concat(d)
     return df
@@ -47,7 +45,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split, TimeSeriesSplit
-
+from sklearn.linear_model import LinearRegression
 
 scaler_x = preprocessing.StandardScaler().fit(features.values)
 # scaler_y = preprocessing.StandardScaler().fit(targets.values[:, None])
@@ -73,7 +71,8 @@ x_train, x_test, y_train, y_test = train_test_split(features1,
 # estimators = np.arange(10, 1000, 10)
 # scores = []
 # for estimator in estimators:
-reg = RandomForestRegressor()
+# reg = RandomForestRegressor()
+reg = LinearRegression()
 reg.fit(x_train, y_train)
 
 
@@ -83,7 +82,6 @@ y_predict = reg.predict(x_test)
 
 score = reg.score(x_test, y_test)
 print('test score', score)
-scores.append(score)
     
 
 plt.plot(y_predict, y_test, '.', alpha=.2)

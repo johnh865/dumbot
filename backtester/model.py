@@ -1,4 +1,4 @@
-
+import pdb
 import datetime
 import dataclasses
 from collections import deque 
@@ -27,7 +27,7 @@ from backtester.utils import dates2days, floor_to_date
 from backtester.utils import interp_const_after, delete_attr
 from backtester.exceptions import NoMoneyError, TradingError
 from backtester import utils
-
+from backtester.exceptions import DataError
 
 
 @dataclasses.dataclass
@@ -211,12 +211,30 @@ class SymbolTransactions:
 
     
     def get_next_trading_date(self, dates: np.ndarray) -> np.ndarray:
-        """Get next available trading date."""
+        """Get next available trading date. 
+        Array values are np.nan if particular date not available. """
         
         dates0 = utils.floor_dates(dates)
-        dates = self.df.index.values
-        ii = np.searchsorted(dates, dates0)
-        return dates[ii]
+        dates1 = self.df.index.values
+        dlen = len(dates1)
+        ii = np.searchsorted(dates1, dates0)
+        
+        ii_no_data = ii >= dlen
+        # jj = ii[ii_no_data]
+        
+        ii[ii_no_data] = dlen - 1
+        
+        out = dates1[ii]
+        # out[jj] = np.nan
+        return out
+    
+        
+        # try:
+        #     return dates1[ii]
+        # except IndexError:
+        #     symbol = self.symbol
+        #     s = f'Data "{self.close_name}" not found for {dates} for symbol {symbol}.'
+        #     raise DataError(s)
         
     
     # def _get_previous_close(self, date):
@@ -643,6 +661,18 @@ class Transactions:
             value = st.get_share_valuation(date)
             new[symbol] = value
         return pd.Series(new)
+    
+    
+    def get_asset_shares(self, date: datetime.datetime) -> pd.Series:
+        """Retrieve # of shares for each asset."""
+        sdict = self._get_symbol_transactions_dict()
+        new = {}
+        st : SymbolTransactions
+        for symbol, st in sdict.items():
+            date = np.datetime64(date)
+            value = st.get_shares(date)
+            new[symbol] = value
+        return pd.Series(new)    
     
     
     def get_traded_symbols(self):

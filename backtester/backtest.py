@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
+import pdb
+
 import datetime
 from abc import abstractmethod, ABCMeta
 from typing import Callable 
 from functools import cached_property
+import warnings 
 
 import numpy as np
 import pandas as pd
 
 
 from backtester.model import Transactions, SymbolTransactions, TransactionsDF
+from backtester.model import Action
 from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
 from backtester.stockdata import BaseData, Indicators
@@ -61,9 +65,11 @@ class Strategy(metaclass=ABCMeta):
         # Clean cached property.
         delete_attr(self, 'asset_values')
         delete_attr(self, 'stock_data')
+        delete_attr(self, 'existing_symbols')
+        delete_attr(self, 'unlisted_symbols')
 
         
-    def _delete_cache(self):
+    def _delete_transaction_cache(self):
         delete_attr(self, 'available_funds')
         delete_attr(self, 'asset_values')
 
@@ -73,39 +79,68 @@ class Strategy(metaclass=ABCMeta):
         self._date += np.timedelta64(SMALL_TIME_SECONDS, 's')
         
     
-    def buy(self, symbol: str, amount: float):
+    def buy(self, symbol: str, amount: float) -> Action:
         """Buy a dollar amount of an asset during current increment."""
+        
         if amount > self.available_funds + SMALL_DOLLARS:
             raise NoMoneyError('Not enough funds for buy.')
             
-        self._delete_cache()
+        self._delete_transaction_cache()
         self._increment_small_time()
         trade = self._transactions.buy(
             date=self._date, symbol=symbol, amount=amount)
         return trade
         
         
-    def sell(self, symbol: str, amount: float):
-        """Sell a dollar amount of an asset during current increment."""
+    def sell(self, symbol: str, amount: float) -> Action:
+        """Sell a dollar amount of an asset during current increment.
+        If symbol is empty str, do nothing. """
+        if symbol == '':
+            return
         
-        self._delete_cache()
+        self._delete_transaction_cache()
         self._increment_small_time()
         trade =  self._transactions.sell(
             date=self._date, symbol=symbol, amount=amount)
         return trade
         
         
-    def sell_percent(self, symbol: str, amount: float):
+    def sell_percent(self, symbol: str, amount: float) -> Action:
         """Sell a percentage of an asset during current increment."""
-        self._delete_cache()
+        self._delete_transaction_cache()
         self._increment_small_time()
         trade = self._transactions.sell_percent(
             date=self._date, symbol=symbol, amount=amount)
         return trade
+
+
+    def sell_delisted(self) -> np.ndarray:
+        """Symbols symbols may become delisted. Force sell them.
+        
+        Returns
+        -------
+        out : np.ndarray[str]
+            Symbols that have been sold due to delisting.
+        """
+        
+        shares = self._transactions.get_asset_shares(self._date)
+        
+        asset_values = shares.values
+        asset_names = shares.index.values
+        asset_names = asset_names[asset_values > 0]
+        symbols = np.intersect1d(asset_names, self.unlisted_symbols)
+        for symbol in symbols:
+            self.sell_percent(symbol, amount=1.0)    
+        
+        if len(symbols) > 0:
+            warnings.warn(
+                f'The following stocks have been delisted for {self.date}: '
+                f'{symbols}')
+        return symbols
         
         
     @cached_property
-    def available_funds(self):
+    def available_funds(self) -> float:
         """Available cash for trading during current increment."""
         return self._transactions.get_available_funds(self._date)
     
@@ -117,9 +152,24 @@ class Strategy(metaclass=ABCMeta):
     
     
     @cached_property
-    def stock_data(self):
+    def stock_data(self) -> dict[pd.DataFrame]:
         """dict[DataFrame] : Dataframes for each symbol for the current increment."""
         return self._indicators.stock_data.get_symbols_before(self._date)  
+
+    
+    @cached_property
+    def existing_symbols(self) -> list[str]:
+        """Symbols which exist at the current date increment."""
+        return self._indicators.stock_data.existing_symbols(self.date)
+    
+    
+    @cached_property
+    def unlisted_symbols(self) -> list[str]:
+        """Symbols which do not exist at the current date increment."""
+        return self._indicators.stock_data.unlisted_symbols(self.date)
+    
+    
+
     
     
     def indicator(self,
@@ -305,7 +355,7 @@ class BacktestStats:
         
     
     @cached_property
-    def asset_values(self):
+    def asset_values(self) -> pd.DataFrame:
         """Get asset values for all available dates."""
         st : SymbolTransactions
         transactions = self._transactions
@@ -334,7 +384,7 @@ class BacktestStats:
  
     
     @cached_property
-    def performance(self):
+    def performance(self) -> pd.DataFrame:
         """Normalized performance of bot vs considered stocks."""
         st : SymbolTransactions
         transactions = self._transactions
@@ -342,7 +392,7 @@ class BacktestStats:
         dates = self._active_days
         
         d = {}
-        d[self.COLUMN_DATE] = dates
+        # d[self.COLUMN_DATE] = dates
         
         # Get stock price
         for symbol in symbols:
@@ -355,6 +405,30 @@ class BacktestStats:
         equity = equity / equity[0]
         d[self.COLUMN_EQUITY] = equity
         return pd.DataFrame(d)
+    
+    
+    @cached_property
+    def exposure_percentages(self):
+        """Ratio of exposure time and net equity for each asset,
+        to calculate the percentage of resources (time & money) 
+        an asset has used."""
+        assets = self.asset_values
+        dates = (assets.index
+                       .values
+                       .astype('datetime64[D]')
+                       .astype(float))
+        
+        
+        new = {}
+        for name in assets.columns:
+            values = assets[name].values
+            new[name] = np.trapz(values, dates)
+        series = pd.Series(data=new)
+        
+        ending_equity = series[self.COLUMN_EQUITY]
+        
+        series = series / ending_equity
+        return series
     
             
        

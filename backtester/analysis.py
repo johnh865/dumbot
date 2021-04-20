@@ -222,17 +222,6 @@ def buysell_max_change(buy_index, sell_index, growths, changes):
 def avg_future_growth(times: np.ndarray,
                       closes: np.ndarray,
                       window: int) -> (np.ndarray, np.ndarray):
-    
-    times = np.array(times, dtype=np.float64)
-    closes = np.array(closes, dtype=np.float64)
-    window = np.int64(window)
-    return _avg_future_growth(times, closes, window)
-
-
-@jit(nopython=True)
-def _avg_future_growth(times: np.ndarray, 
-                       closes: np.ndarray,
-                       window: int) -> (np.ndarray, np.ndarray):
     """Given a time point, average future growth rate given future window period.
     Used to meaure how good/bad it is to buy stock at a particular time point. 
     
@@ -249,7 +238,18 @@ def _avg_future_growth(times: np.ndarray,
     -------
     np.ndarray
         For each point in `times`, the future growth rate .
-    """
+    """    
+    times = np.array(times, dtype=np.float64)
+    closes = np.array(closes, dtype=np.float64)
+    window = np.int64(window)
+    return _avg_future_growth(times, closes, window)
+
+
+@jit(nopython=True)
+def _avg_future_growth(times: np.ndarray, 
+                       closes: np.ndarray,
+                       window: int) -> (np.ndarray, np.ndarray):
+
 
     len1 = len(times)
     out = np.zeros(len1, dtype=np.float64)
