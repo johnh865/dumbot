@@ -2,8 +2,9 @@
 
 
 import logging
-
+import sqlite3
 import pandas as pd
+from pandas.io.sql import read_sql
 
 from sqlalchemy import create_engine
 from sqlalchemy import MetaData
@@ -49,6 +50,31 @@ class SQLClient:
         df = self.read_dataframe(old)
         self.drop_table(old)
         self.save_dataframe(df, new)
+        
+        
+    def to_memory(self):
+        """Save db to sqlite in memory"""
+        engine = create_engine('sqlite://')
+        c = engine.connect()
+        # con_mem = c.connection
+        table_names = self.get_table_names()
+        
+        #Here is the connection to <ait.sqlite> residing on disk
+        # con = sqlite3.connect(name, isolation_level=None)
+        # cur = con.cursor()
+        for table in table_names:
+            df = pd.read_sql(table, engine)
+            df.to_sql(con=engine,
+                      name=table,
+                      if_exists='replace')
+            
+        return engine
+    
+    
+            
+
+
+        
         
 
 

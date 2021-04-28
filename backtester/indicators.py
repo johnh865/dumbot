@@ -8,9 +8,46 @@ import numpy as np
 from scipy.stats import linregress
 from backtester.exceptions import NotEnoughDataError
 
+import pdb
+
+
+
+def array_windows(x: np.ndarray, 
+                  window: np.int64, 
+                  skip: np.int64=np.int64(1)) -> np.ndarray:
+    """Construct 2-d array for with a window interval for each x.
     
+    Parameters
+    ----------
+    x : np.ndarray shape (a,)
+        Array to construct windows.
+    window : np.int64
+        Size of window.
+
+    Returns
+    -------
+    intervals : np.ndarray shape (a, b)
+        Intervals of x.
+
+    Raises
+    ------
+    backtester.exceptions.NotEnoughDataError
+        Raise if window is larger than len(x).
+    """
+    
+    # This is to catch a weird CPUDispatcher NULL when using numba in cProfile
+    try:
+        if skip >= 2:
+            return _array_windows_skip(x, window, skip)
+        else:
+            return _array_windows(x, window)
+    except SystemError:
+        raise NotEnoughDataError('Window size is greater than length x')
+        
+        
+        
 @njit
-def array_windows(x: np.ndarray, window: np.int64) -> np.ndarray:
+def _array_windows(x: np.ndarray, window: np.int64) -> np.ndarray:
     """Construct 2-d array for with a window interval for each x.
     
     Parameters
@@ -41,6 +78,22 @@ def array_windows(x: np.ndarray, window: np.int64) -> np.ndarray:
     return intervals
 
 
+@njit
+def _array_windows_skip(x: np.ndarray, 
+                        window: np.int64,
+                        skip: np.int64=1) -> np.ndarray:
+    xlen = len(x)
+    tnum = (xlen - window) / skip
+    if tnum < 1:
+        raise NotEnoughDataError('Window size is greater than length x')
+        
+    intervals = np.zeros((tnum, window))
+    for ii in range(tnum):
+        kk = ii * skip
+        intervals[ii] = x[kk : kk + window]
+    return intervals    
+
+
 def append_nan(arr, window: int):
     nans = np.empty(window)
     nans[:] = np.nan
@@ -58,6 +111,21 @@ def trailing_percentiles(x: np.ndarray, window: np.int64):
         percentiles = np.nanpercentile(interval, pbins)
         out[ii] = np.interp(interval[-1], percentiles, pbins)
     return append_nan(out, window)
+
+
+@njit
+def trailing_mean(x: np.array,):
+    """Calculate mean for all data to the current point."""
+    ilen, jlen = x.shape
+
+    new = np.zeros(ilen, jlen)
+    new[0, :] = np.nan
+    
+    for ii in range(1, ilen):
+        xi = np.nanmean(x[0 : ii], axis=0)
+        new[ii] = xi
+    return new
+ 
 
 
 class TrailingBase:
@@ -80,7 +148,7 @@ class TrailingBase:
             tdelta = tdelta.astype('timedelta64[D]')
         except TypeError:
             pass
-        return tdelta
+        return np.array(tdelta)
     
     
     def _append_nan(self, arr):
@@ -102,7 +170,7 @@ class TrailingBase:
     @cached_property
     def _time_days_int_intervals(self):
         """Construct time intervals for windowing."""
-        times = self.time_days_int.values
+        times = self.time_days_int
         return array_windows(times, self.window_size)
 
         
@@ -127,6 +195,9 @@ class TrailingStats(TrailingBase):
     """
 
     def _regression(self, x, y):
+        """Perform regression.
+        https://mathworld.wolfram.com/LeastSquaresFitting.html"""
+        
         x = np.asarray(x)
         xmean = np.mean(x, axis=1)
         ymean = np.mean(y, axis=1)        
@@ -142,6 +213,8 @@ class TrailingStats(TrailingBase):
         m = self._append_nan(m)
         b = self._append_nan(b)
         return m, b
+    
+    
     
     
     
@@ -278,7 +351,7 @@ class TrailingStats(TrailingBase):
         
         y_reg = self.exp_reg_value[self.window_size :, None]
         y_intervals = self._adj_close_intervals
-        delta = y_intervals - y_reg
+        delta = (y_intervals - y_reg) / y_reg
         return np.std(delta, axis=1)
     
     
@@ -301,12 +374,22 @@ class TrailingStats(TrailingBase):
         mins = np.min(closes, axis=1)
         last = closes[:, -1]
         return (last - mins) / mins    
+    
+    
+    @cached_property
+    @TrailingBase._append_nan_dec
+    def return_ratio(self):
+        """Get ratio of start to end value."""
+        closes = self._adj_close_intervals
+        start = closes[:, 0]
+        last = closes[:, -1]
+        return (last - start) / start
+        
+    
 
 
 class FutureStats(TrailingStats):
     
-        
-        
     @cached_property
     def times(self) -> np.ndarray:
         """Associated times for output properties."""

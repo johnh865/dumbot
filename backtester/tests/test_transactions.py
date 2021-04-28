@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import pdb
 
 from backtester.model import Action, Transactions
 from backtester.definitions import ACTION_BUY, ACTION_SELL, ACTION_SELL_PERCENT
@@ -97,10 +98,39 @@ def test_interday():
 
     
 
-
+def test_equity():
+    yahoo = YahooData()
+    dates = yahoo.get_trade_dates()
+    date1 = np.datetime64('2016-01-01')
+    date2 = np.datetime64('2016-02-01')
+    
+    t1 = Transactions(stock_data = yahoo, 
+                      init_funds = 100,)
+    
+    dates = dates[(dates > date1) & (dates < date2)]
+    symbol1 = 'SPY'
+    
+    for ii, date in enumerate(dates):
+        
+        if ii % 2 == 0:    
+            t1.buy(date, symbol1, 1)
+        else:
+            t1.sell_percent(date, symbol1, 1)
+            
+    df1 = t1.dataframe
+    del t1.dataframe
+    t1._execute_equity()
+    df2 = t1.dataframe
+    
+    # pdb.set_trace()
+    
+    assert np.all(df1.values == df2.values)
+    return
+        
 
 
 
 if __name__ == '__main__':
     test_transations()
     test_interday()
+    test_equity()

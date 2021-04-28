@@ -4,7 +4,7 @@ import pdb
 import datetime
 from abc import abstractmethod, ABCMeta
 from typing import Callable 
-from functools import cached_property
+from functools import cached_property, lru_cache
 import warnings 
 
 import numpy as np
@@ -16,8 +16,9 @@ from backtester.model import Action
 from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
 from backtester.stockdata import BaseData, Indicators
-from backtester.exceptions import NoMoneyError, TradingError
+from backtester.exceptions import NoMoneyError, TradingError, NotEnoughDataError
 from backtester.definitions import SMALL_DOLLARS
+from backtester.indicators import TrailingStats
 
 SMALL_TIME_SECONDS = 1
 
@@ -142,7 +143,7 @@ class Strategy(metaclass=ABCMeta):
     @cached_property
     def available_funds(self) -> float:
         """Available cash for trading during current increment."""
-        return self._transactions.get_available_funds(self._date)
+        return self._transactions.last_available_funds()
     
     
     @cached_property
@@ -252,6 +253,17 @@ class _IndicatorValue:
         date = self.strategy.date
         dict1 = self.indicators.get_dict_before(symbol, date)
         return dict1[self.name]
+    
+    
+    def get_last(self, symbol: str, default=np.nan):
+        try:
+            arr = self.__call__(symbol)
+        except NotEnoughDataError:
+            return default
+        try:
+            return arr[-1]
+        except IndexError:
+            return default
     
 
 class Backtest:
@@ -407,6 +419,61 @@ class BacktestStats:
         return pd.DataFrame(d)
     
     
+    def benchmark(self, symbol: str):
+        """Get performance of a buy and hold for the same time frame."""
+        dates = self._active_days
+        mask = np.array([0, -1])
+        dates2 = dates[mask]
+        
+        transactions = self._transactions
+        
+        st = SymbolTransactions(
+            symbol, 
+            stock_data=transactions.stock_data,
+            commission=transactions.commission
+            )        
+        
+        prices = st.get_adj_price(dates2)
+        
+        return prices[-1] / prices[0]
+    
+    
+    @lru_cache
+    def mean_returns(self, window: int):
+        series1 = self.performance[self.COLUMN_EQUITY]
+        r1 = TrailingStats(series1, window_size=window).return_ratio
+        return r1
+    
+    
+    @lru_cache
+    def benchmark_returns(self, symbol: str, window: int):
+        series1 = self.performance[self.COLUMN_EQUITY]
+        index = series1.index        
+        transactions = self._transactions
+        st = SymbolTransactions(
+            symbol, 
+            stock_data=transactions.stock_data,
+            commission=transactions.commission
+            )   
+        prices = st.get_adj_price(index)
+        series2 = pd.Series(data=prices, index=index)
+
+        r2 = TrailingStats(series2, window_size=window).return_ratio
+        return r2
+    
+    
+    @lru_cache
+    def sharpe_ratio(self, symbol: str, window: int):
+        """Calculate Sharpe Ratio"""
+        r1 = self.mean_returns(window)
+        r2 = self.benchmark_returns(symbol, window)
+        delta = r1 - r2
+        
+        mean = np.nanmean(delta)
+        std = np.nanstd(delta)
+        return mean / std
+        
+    
     @cached_property
     def exposure_percentages(self):
         """Ratio of exposure time and net equity for each asset,
@@ -430,11 +497,7 @@ class BacktestStats:
         series = series / ending_equity
         return series
     
-            
-       
 
-            
-            
 
 
 

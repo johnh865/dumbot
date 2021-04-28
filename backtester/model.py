@@ -222,8 +222,13 @@ class SymbolTransactions:
         ii_no_data = ii >= dlen
         # jj = ii[ii_no_data]
         
-        ii[ii_no_data] = dlen - 1
-        
+        try:
+            ii[ii_no_data] = dlen - 1
+        except TypeError:
+            if ii_no_data:
+                ii = dlen - 1
+            
+            
         out = dates1[ii]
         # out[jj] = np.nan
         return out
@@ -293,6 +298,20 @@ class SymbolTransactions:
         # dates = np.asarray(dates).astype('datetime64')
         out = interp_const_after(times, shares, dates, before=0.0)
         return out
+    
+    
+    def get_share_valuation_for_action(self, ii:int):
+        """Retrieve share value for a specific action index."""
+        action = self.executed_actions[ii]
+        shares =  action.shares
+        date = action.date
+        date = floor_to_date(date)
+        try:
+            close = self.df[self.close_name][date]
+        except KeyError:
+            close = self.get_next_close(date)
+        return close * shares
+        
         
     
     def _get_shares(self, date: datetime.datetime) -> float:
@@ -585,7 +604,7 @@ class Transactions:
             
         self.balances.append(balance)
         self.executed_actions.append(action)
-        self._execute_equity()
+        self._execute_last_equity()
         return
     
         
@@ -624,9 +643,36 @@ class Transactions:
         action = Action(date, name=ACTION_HOLD, amount=0.0)
         return self.add(action)
     
+    
+    def _execute_last_equity(self):
+        """Calculate equity (cash + assets) for the last transaction."""
+        # try:
+        #     last_executed_balance = self.balances[-2]
+        #     last_equity = self.last_executed_balance.equity
+        # except IndexError:
+        #     last_equity = self.init_funds
+        
+        balance : AccountBalance
+        balance = self.balances[-1]
+        action = self.executed_actions[-1]
+        
+        sdict = self._get_symbol_transactions_dict()
+        symbol = action.symbol
+        if symbol is not None:
+            s_transaction = sdict[action.symbol]        
+            values = s_transaction.get_share_valuation_for_action(-1)
+        else:
+            values = 0
+        equity = balance.available_funds
+        equity += values
+        
+        balance.equity = equity
+        return
+        
+        
         
     def _execute_equity(self):
-        """Calculate equity (cash + assets)"""
+        """Re-Calculate equity (cash + assets)"""
         sdict = self._get_symbol_transactions_dict()
         actions = self.executed_actions
         balances = self.balances
@@ -705,11 +751,14 @@ class Transactions:
         return balance2.available_funds        
         
         
-    # def last_available_funds(self):
-    #     try:
-    #         return self.balances[-1].available_funds
-    #     except IndexError:
-    #         return self.init_funds
+    def last_available_funds(self):
+        """Retrieve funds from the last transaction."""
+        try:
+            return self.balances[-1].available_funds
+        except IndexError:
+            return self.init_funds
+        
+        
         
     @cached_property
     def dataframe(self) -> pd.DataFrame:

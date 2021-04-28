@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import pdb
 import numpy as np
+import pandas as pd 
 import matplotlib.pyplot as plt
 
-from backtester.indicators import TrailingStats, array_windows
+from backtester.indicators import TrailingStats, array_windows, trailing_percentiles
 from backtester.definitions import DF_ADJ_CLOSE, DF_VOLUME, DF_HIGH, DF_LOW
 from datasets.symbols import ALL
 from backtester.stockdata import YahooData
@@ -166,10 +167,66 @@ def test_intervals():
 
 
 
+def test_std():
+    y = YahooData()
+    df = y['VOO']
+    
+    
+    date1 = np.datetime64('2020-01-01')
+    date2 = np.datetime64('2020-11-01')
+
+    ii = (df.index > date1) & (df.index < date2)
+    df = df.loc[ii]
+    
+    
+    series = df[DF_ADJ_CLOSE]
+    ts = TrailingStats(series, window_size=10)
+    
+    c = ts.exp_std_dev
+    series2 = pd.Series(data=c, index=series.index)
+    # p = trailing_percentiles(c, window=300)
+
+    
+    # c = ts.exp_accel
+    x = series.index
+    y = series.values
+    ax = plt.subplot(2,1,1)
+    ax.set_yscale('log')
+    plt.scatter(x,y,c=c, s=4)
+    plt.grid()
+
+
+    plt.subplot(2,1,2)
+    plt.plot(x, c)
+    # plt.plot(x, p/100)
+    plt.grid()
+    return
+
+
+def test_max_loss():
+    y = YahooData()
+    df = y['VOO']
+    
+    
+    date1 = np.datetime64('2020-01-01')
+    date2 = np.datetime64('2020-11-01')
+
+    ii = (df.index > date1) & (df.index < date2)
+    df = df.loc[ii]
+    series = df[DF_ADJ_CLOSE]
+    ts = TrailingStats(series, window_size=10)
+    max_loss = ts.max_loss
+    return
+
+    
+    
 
 if __name__ == '__main__':
-    test1()
-    test_trailing_avg()
-    test_close_intervals()
-    test_intervals()
+    # test1()
+    # test_trailing_avg()
+    # test_close_intervals()
+    # test_intervals()
+    
+    # test_std()
+    test_max_loss()
 

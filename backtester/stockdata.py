@@ -1,3 +1,4 @@
+# import pdb
 import datetime
 from functools import lru_cache, cached_property
 from abc import abstractmethod, ABCMeta
@@ -13,7 +14,7 @@ from datasets.yahoo import (
     read_yahoo_symbol_names,
     read_yahoo_trade_dates,
     )
-from backtester.exceptions import DataError
+from backtester.exceptions import DataError, NotEnoughDataError
 
 class TableData:
     """Methods to retrieve symbol data faster."""
@@ -23,9 +24,9 @@ class TableData:
         self.df = df
         self.values = df.values
         try:
-            self.names = df.columns.values.astype(str)
+            self.columns = df.columns.values.astype(str)
         except AttributeError:
-            self.names = [df.name]
+            self.columns = [df.name]
             
         self._min_date = np.min(self.times)
         self._max_date = np.max(self.times)
@@ -47,6 +48,13 @@ class TableData:
         """Pandas dataframes are slow. Get values for ~10x speed-up."""
         ii = np.searchsorted(self.times, date)
         return self.values[0 : ii]
+    
+
+
+    def array_right_before(self, date: np.datetime64):
+        """Get slice of values"""
+        ii = np.searchsorted(self.times, date)
+        return self.values[ii - 1]
     
     
     def exists_at(self, date: np.datetime64) -> bool:
@@ -154,8 +162,34 @@ class BaseData(metaclass=ABCMeta):
         symbols = self.get_symbol_names()
         new = {}
         for symbol in symbols:
-            new[symbol] = self.get_symbol_all(symbol)
+            try:
+                new[symbol] = self.get_symbol_all(symbol)
+            except NotEnoughDataError:
+                pass
         return new
+    
+    
+    def get_column_from_all(self, column: str) -> pd.DataFrame:
+        """From all symbols retrieve the specified data column"""
+        symbols = self.get_symbol_names()
+        symbol = symbols[0]
+        table = self._get_symbol_data(symbol)
+        columns = table.columns
+        # cloc = np.where(columns == column)[0][0]
+        
+        new = []
+        for symbol in symbols:
+            try:
+                table = self._get_symbol_data(symbol)
+                # values = table.values[:, cloc]
+                series = table.df[column]
+                series.name = symbol
+                new.append(series)
+            except NotEnoughDataError:
+                pass
+            
+        df = pd.concat(new, axis=1, join='outer',)
+        return df
        
     
 class BaseStockData(BaseData):        
@@ -211,7 +245,7 @@ class YahooData(BaseStockData):
     def __init__(self, symbols=()):
         if len(symbols) == 0:
             symbols = read_yahoo_symbol_names(only_good=True)
-        self._symbols = symbols
+        self.symbols = symbols
         return
     
     
@@ -220,7 +254,7 @@ class YahooData(BaseStockData):
     
     
     def get_symbol_names(self):
-        return self._symbols
+        return self.symbols
     
     
     def get_trade_dates(self):
@@ -236,7 +270,9 @@ def _get_indicator_name(func, args, kwargs):
     name += '(' + str_args
     str_kwargs = [f'{k}={v}' for (k,v) in kwargs.items()]
     str_kwargs = ','.join(str_kwargs)
-    name += ', ' + str_kwargs + ')'    
+    if len(str_kwargs) > 0:
+        name += ', ' + str_kwargs
+    name += ')'    
     return name
         
 

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from backtester.definitions import DF_ADJ_CLOSE, DF_VOLUME
 from backtester.stockdata import YahooData
-from backtester.analysis import buysell, BuySell
+from backtester.analysis.buysell import buysell, BuySell
 from backtester import utils
 
 

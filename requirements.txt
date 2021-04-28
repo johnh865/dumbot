@@ -11,6 +11,7 @@ pytest
 numba
 spyder=4.2.5
 bs4
+python-dotenv
 
 # Machine learning stuff
 sklearn
