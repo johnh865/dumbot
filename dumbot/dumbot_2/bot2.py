@@ -166,7 +166,7 @@ if __name__ == '__main__':
             end_date=datetime.datetime(2014, 4, 26),
             )
         bt.strategy.window = window
-        bt.start()
+        bt.run()
         perf = bt.stats.performance
         my_perf = perf['equity'].values[-1]
         performances.append(my_perf)

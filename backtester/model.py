@@ -514,6 +514,16 @@ class Transactions:
         return
     
     
+    def reset(self):
+        """Clear transaction data."""
+        self.executed_actions = []
+        self.balances = []
+        self.queue = deque()
+        del self._symbol_transactions_dict
+        del self.dataframe
+        del self.asset_history
+    
+    
     def _get_symbol_transactions_dict(self) -> dict[str, SymbolTransactions]:
         try:
             sdict = getattr(self, '_symbol_transactions_dict')

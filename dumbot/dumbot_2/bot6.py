@@ -30,10 +30,10 @@ load_dotenv()
 
 yahoo = YahooData()
 symbols = yahoo.get_symbol_names()
-rs = np.random.default_rng(0)
+rs = np.random.default_rng(1)
 rs.shuffle(symbols)
 
-STOCKS = symbols[0:300]
+STOCKS = symbols[0:600]
 STOCKS.append('SPY')
 STOCKS.append('VOO')
 # STOCKS.append('GOOG')
@@ -63,6 +63,8 @@ df = indicator.get_column_from_all('post1()')
 table = TableData(df)
 index_spy = np.where(df.columns == 'SPY')[0][0]
 
+# %%
+
 class Strat1(Strategy):
         
     def init(self):
@@ -91,12 +93,12 @@ class Strat1(Strategy):
         growth_spy = growths[index_spy]
         growth_delta = np.nanmax(growths) - growth_spy
         
-        # MAX_ALLOWED = 30
+        # MAX_ALLOWED = 5
         
-        buy_indices = growths > growth_spy 
+        buy_indices = growths > max(0, growth_spy)
         
         mean2 = np.mean(growths[buy_indices])
-        std2 = np.std(growths[buy_indices]) * 0.0
+        std2 = np.std(growths[buy_indices]) * 1.25
         buy_indices = growths > mean2 + std2
         
         
@@ -105,7 +107,7 @@ class Strat1(Strategy):
         #     buy_indices = isort <  MAX_ALLOWED
             
         new_stocks = table.columns[buy_indices]
-        
+        # pdb.set_trace()
         if len(new_stocks) == len(self.current_stocks):
             if np.all(new_stocks == self.current_stocks):
                 return
@@ -151,10 +153,10 @@ if __name__ == '__main__':
         strategy=Strat1, 
         cash=100, 
         commission=.002,
-        start_date=datetime.datetime(2001, 1, 1),
-        end_date=datetime.datetime(2002, 12, 20),
+        start_date=datetime.datetime(2010, 1, 1),
+        end_date=datetime.datetime(2020, 12, 20),
         )
-    bt.start()
+    bt.run()
     perf = bt.stats.performance
     assets = bt.stats.asset_values
     my_perf = perf['equity'].values[-1]
@@ -167,9 +169,10 @@ if __name__ == '__main__':
     assets = bt.stats.asset_values
     
     
-    # r1 = bt.stats.mean_returns(252)
-    # r2 = bt.stats.benchmark_returns('SPY', 252)
-    
+    r1 = bt.stats.mean_returns(252)
+    print('My mean return', np.nanmean(r1))
+    r2 = bt.stats.benchmark_returns('SPY', 252)
+    print('SPY mean return', np.nanmean(r2))
     # plt.plot(perf.index, r1, label='Algo')
     # plt.plot(perf.index, r2, label='SPY')
     # plt.legend()

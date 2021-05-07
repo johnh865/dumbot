@@ -121,7 +121,7 @@ if __name__ == '__main__':
         start_date=datetime.datetime(2008, 4, 1),
         end_date=datetime.datetime(2020, 4, 26),
         )
-    bt.start()
+    bt.run()
     perf = bt.stats.performance
     assets = bt.stats.asset_values
     

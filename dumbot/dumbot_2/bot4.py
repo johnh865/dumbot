@@ -99,7 +99,7 @@ if __name__ == '__main__':
         start_date=datetime.datetime(2016, 4, 1),
         end_date=datetime.datetime(2016, 4, 10),
         )
-    bt.start()
+    bt.run()
     perf = bt.stats.performance
     my_perf = perf['equity'].values[-1]
     print('My performance', my_perf)

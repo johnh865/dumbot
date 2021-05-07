@@ -35,7 +35,6 @@ class Strategy(metaclass=ABCMeta):
     def __init__(self, transactions: Transactions):
         self._transactions = transactions
         self._indicators = Indicators() 
-        self.init()
         
         
     # def _set_indicators(self, indicators: Indicators=None):
@@ -289,7 +288,7 @@ class Backtest:
     ----------
     active_days : np.ndarray[np.datetime64]
         Days in which to actively trade
-    transations : Transactions
+    transactions : Transactions
         Transactions generation object
     stats : BacktestStats
         Performance, balance, and transaction summary and statistics. 
@@ -323,14 +322,16 @@ class Backtest:
         )
         
         self._time_int = dates2days(self.active_days)
+        self.reset()
         return
     
     
-    def start(self):
-        self.strategy : Strategy
-        self.strategy._indicators.set_stock_data(self.stock_data)
-        self.strategy.init()
-        self.transactions.hold(self.active_days[0])
+    def run(self):
+        # self.strategy : Strategy
+        # self.strategy._indicators.set_stock_data(self.stock_data)
+        # self.strategy.init()
+        # self.transactions.hold(self.active_days[0])
+        self.reset()
         
         for ii, active_day in enumerate(self.active_days):            
             self.strategy._set_data(
@@ -345,7 +346,32 @@ class Backtest:
         
         self.stats = BacktestStats(self)
         
-
+        
+    def reset(self, time_index=0):
+        """Reset backtester."""
+        self.strategy : Strategy
+        self.strategy._indicators.set_stock_data(self.stock_data)
+        self.strategy.init()
+        self.transactions.reset()
+        self.transactions.hold(self.active_days[0])
+        self.time_index = time_index
+        
+        
+    
+        
+        
+    def step(self):
+        """Increment one step of backtest simulation."""
+        ii = self.time_index
+        active_day = self.active_days[ii]
+        self.strategy._set_data(
+            date = active_day,
+            days_since_start = self._time_int[ii]
+            )
+        self.strategy.next()
+        self.time_index += 1
+    
+    
     
 class BacktestStats:
     """Process dataframes and information for transactions."""

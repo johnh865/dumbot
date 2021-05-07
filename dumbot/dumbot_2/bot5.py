@@ -1,5 +1,15 @@
 """
 This bot seems to work!!!
+
+Tests well for windows of:
+    - 252*5 = 5 years
+    - 252*1 = 1 year
+    - 252*1.5 = 1.5 year ... super dependent on the stock!
+    
+Tests terribly for :
+    - 252*0.5 = 1/2 year
+    
+    
 """
 
 # -*- coding: utf-8 -*-
@@ -26,7 +36,7 @@ symbols = yahoo.get_symbol_names()
 rs = np.random.default_rng(5)
 rs.shuffle(symbols)
 
-STOCKS = symbols[0:100]
+STOCKS = symbols[200:300]
 STOCKS.append('SPY')
 STOCKS.append('VOO')
 # STOCKS.append('GOOG')
@@ -36,7 +46,7 @@ STOCKS = np.array(STOCKS)
 
 def post1(df:pd.DataFrame):
     series = df[DF_ADJ_CLOSE]
-    ts = TrailingStats(series, 252*5)
+    ts = TrailingStats(series, 252*3)
     stat1 = ts.exp_growth
     return stat1
 
@@ -48,6 +58,7 @@ df = indicator.get_column_from_all('post1()')
 table = TableData(df)
 index_spy = np.where(df.columns == 'SPY')[0][0]
 
+# %%
 class Strat1(Strategy):
         
     def init(self):
@@ -65,7 +76,9 @@ class Strat1(Strategy):
         growths[np.isnan(growths)] = -1
         
         growth_spy = growths[index_spy]
-        growth_delta = np.nanmax(growths) - growth_spy
+        # growth_delta = np.nanmax(growths) - growth_spy
+        growth_spy = max(0, growth_spy)
+        
         
         # MAX_ALLOWED = 30
         
@@ -117,10 +130,10 @@ if __name__ == '__main__':
         strategy=Strat1, 
         cash=100, 
         commission=.002,
-        start_date=datetime.datetime(2005, 1, 1),
+        start_date=datetime.datetime(2001, 1, 1),
         end_date=datetime.datetime(2021, 1, 1),
         )
-    bt.start()
+    bt.run()
     perf = bt.stats.performance
     my_perf = perf['equity'].values[-1]
     my_bench = bt.stats.benchmark('SPY')

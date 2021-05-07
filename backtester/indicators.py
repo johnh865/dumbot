@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import math
-from functools import cached_property
+from functools import cached_property, wraps
 from numba import njit
+from math import sqrt
 
 import pandas as pd
 import numpy as np
@@ -100,6 +101,25 @@ def append_nan(arr, window: int):
     return np.append(nans, arr)        
 
 
+
+def ignore_nan(func):
+    """Decorator to ignore NAN from results during calculation but add them
+    back in later."""
+    def func2(x):
+        
+        is_nan = np.isnan(x)
+        not_nan = ~is_nan
+        
+        x2 = x[not_nan]
+        out = func(x2)
+        
+        new = np.zeros(x.shape)
+        new[is_nan] = np.nan
+        new[not_nan] = out
+        return new
+    
+    return func2
+
 def trailing_percentiles(x: np.ndarray, window: np.int64):
     """Get percentile distributions from [ 0 to 100] for each value in x."""
     intervals = array_windows(x, window)
@@ -112,7 +132,7 @@ def trailing_percentiles(x: np.ndarray, window: np.int64):
         out[ii] = np.interp(interval[-1], percentiles, pbins)
     return append_nan(out, window)
 
-
+@ignore_nan
 @njit
 def trailing_mean(x: np.array,):
     """Calculate mean for all data to the current point."""
@@ -125,7 +145,42 @@ def trailing_mean(x: np.array,):
         xi = np.nanmean(x[0 : ii], axis=0)
         new[ii] = xi
     return new
+
+
+@ignore_nan
+def cumulative_mean(x: np.array):
+    return _cumulative_mean(x)
+
+
+@njit
+def _cumulative_mean(x: np.array):
+    """Doesn't go through ignore_nan decorator"""
+    xlen = len(x)
+    out = np.zeros(xlen)    
+    net = 0 
+    for ii in range(0, xlen):
+        net += x[ii]
+        out[ii] = net / (ii + 1)
+    return out
+    
  
+    
+@ignore_nan
+@njit
+def cumulative_std(x: np.ndarray, mean: np.ndarray=None):
+    """Corrected sample std dev for all data to the current point cumulatively.
+    You must also calculate the cumulative mean and use as input."""
+                
+    xlen = len(x)
+    out = np.zeros(xlen)
+    net = 0
+    if mean is None:
+        mean = _cumulative_mean(x)
+    
+    for ii in range(xlen):
+        net += (x[ii] - mean[ii]) **2
+        out[ii] = sqrt(net / ii)
+    return out
 
 
 class TrailingBase:
@@ -161,6 +216,8 @@ class TrailingBase:
     @staticmethod
     def _append_nan_dec(func):
         """Decorator to append np.nan to beginning of the array."""
+        
+        @wraps(func)
         def func2(self):
             output = func(self)
             return self._append_nan(output)
@@ -205,14 +262,16 @@ class TrailingStats(TrailingBase):
         y1 = y - ymean[:, None]
         ss_xx = np.sum(x1**2, axis=1)
         ss_xy = np.sum(x1 * y1, axis=1)
-        # ss_yy = np.sum(y1**2, axis=1)
+        ss_yy = np.sum(y1**2, axis=1)
         
         m = ss_xy / ss_xx
         b = ymean - m * xmean
-        
+        r = ss_xy / np.sqrt(ss_xx * ss_yy)
+
         m = self._append_nan(m)
         b = self._append_nan(b)
-        return m, b
+        r = self._append_nan(r)
+        return m, b, r
     
     
     
@@ -263,8 +322,8 @@ class TrailingStats(TrailingBase):
         """(np.array, np.array) : Slope and intercept within window"""
         closes = self._adj_close_intervals
         times = self._time_days_int_intervals
-        slopes, b = self._regression(times, closes)
-        return slopes, b
+        slopes, b, r = self._regression(times, closes)
+        return slopes, b, r
         
         
     @cached_property
@@ -384,6 +443,8 @@ class TrailingStats(TrailingBase):
         start = closes[:, 0]
         last = closes[:, -1]
         return (last - start) / start
+    
+            
         
     
 

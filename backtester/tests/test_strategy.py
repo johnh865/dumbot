@@ -38,7 +38,7 @@ def test1():
                  start_date = datetime(2018, 1, 1),
                  end_date = datetime(2019, 1, 1),
                  )
-    b.start()
+    b.run()
     df = b.stats.transactions
     assert len(df) > 0
     
@@ -79,7 +79,7 @@ def test2():
                  start_date = datetime(2014, 1, 1),
                  end_date = datetime(2019, 1, 1),
                  )
-    bt.start()
+    bt.run()
     # df = b.transactions.stats.dataframe()
     # assert len(df) > 0
     # df2 = b.transactions.stats.asset_values()
@@ -117,7 +117,7 @@ def test_buy_hold():
                   start_date=datetime(2014, 1, 1),
                   end_date=datetime(2019, 1, 1)
                   )
-    bt.start()
+    bt.run()
     
     performance = bt.stats.performance
     assets = bt.stats.asset_values

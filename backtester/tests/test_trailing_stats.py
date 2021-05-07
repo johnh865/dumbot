@@ -223,10 +223,10 @@ def test_max_loss():
 
 if __name__ == '__main__':
     # test1()
-    # test_trailing_avg()
+    test_trailing_avg()
     # test_close_intervals()
     # test_intervals()
     
     # test_std()
-    test_max_loss()
+    # test_max_loss()
 

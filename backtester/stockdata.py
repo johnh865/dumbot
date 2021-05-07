@@ -77,6 +77,13 @@ class BaseData(metaclass=ABCMeta):
         raise NotImplementedError('This method needs to be implemented by user')
         
         
+        
+    @abstractmethod
+    def retrieve_symbol(self, symbol: str) -> pd.DataFrame:
+        """Get all available dataframe data for a stock ticker symbol."""
+        raise NotImplementedError('This method needs to be implemented by user')
+
+        
     def existing_symbols(self, date: np.datetime64) -> list[str]:
         """Sometimes data will not be available for certain dates. Retrieve
         the symbols that exist for a given time."""
@@ -101,11 +108,7 @@ class BaseData(metaclass=ABCMeta):
         return out
 
 
-        
-    @abstractmethod
-    def retrieve_symbol(self, symbol: str) -> pd.DataFrame:
-        """Get all available dataframe data for a stock ticker symbol."""
-        raise NotImplementedError('This method needs to be implemented by user')
+
         
         
     @lru_cache(maxsize=1000)
@@ -377,6 +380,8 @@ class Indicators(BaseData):
         for name, idata in self._indicators.items():
             (func, args, kwargs) = idata
             try:
+                value = func(df, *args, **kwargs)
+            except TypeError:
                 value = func(*args, df=df, **kwargs)
             except TypeError:
                 value = func(*args, **kwargs)
@@ -390,7 +395,7 @@ class Indicators(BaseData):
                     
             elif issubclass(dict, type(value)):
                 for key, v in value.items():
-                    name2 = name + f'["{key}"]'
+                    name2 = name + f"['{key}']"
                     check_len(v, name2)
                     df2[name2] = v
             else:
