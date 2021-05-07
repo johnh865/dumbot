@@ -21,32 +21,30 @@ from datasets.yahoo import (
 from backtester.exceptions import DataError, NotEnoughDataError
 
 
-
-
-
-class Symbol(NamedTuple):
-    name : str
-    
-
-class LazyDict(MutableMapping):
+class LazyMap(MutableMapping):
     """Lazy dictionary that applies a function only when the item is retrieved.
     
     Parameters
     ----------
     keys : 
         Dictionary keys
-    function : Callable
+    function : Callable or list[Callable]
         Function to apply onto keys as `out = function(key)`
     """
-    def __init__(self, keys, function: Callable):
+    def __init__(self, keys, function: Callable, values=None):
         self.function = function
         
-        # functions = [[function]] * len(keys)
-        functions = [[function] for _ in keys]
+        if hasattr(function, '__iter__'):
+            functions = [function for _ in keys]
+        else:
+            functions = [[function] for _ in keys]
         
         self._func_dict = dict(zip(keys, functions))
         self._dict = {}
         self._func_memory = [function]
+        
+        if values is not None:
+            self._dict = dict(zip(keys, values))
         
         
     def __getitem__(self, key):
@@ -60,6 +58,7 @@ class LazyDict(MutableMapping):
 
             for func in functions:
                 out = func(out)
+                
             self._dict[key] = out
             self._func_dict[key] = []
             return out            
@@ -86,14 +85,22 @@ class LazyDict(MutableMapping):
         return len(self._dict)
         
     
-    def apply(self, func):
+    def apply(self, func: Callable):
         """Apply a function on all keys."""
-        self._func_memory.append(func)
-        for key in self._func_dict.keys():
-            
-            self._func_dict[key].append(func)
-            
+        
+        if hasattr(func, '__iter__'):
+            self._func_memory.extend(func)
+            for key in self._func_dict.keys():
+                self._func_dict[key].extend(func)
+                
+        else:
+            self._func_memory.append(func)
+            for key in self._func_dict.keys():
+                self._func_dict[key].append(func)
+                
+                
     def map(self, func, deep=True):
+        """Create copy and map a function on all keys."""
         d = self.copy(deep=deep)
         
         d.apply(func)
@@ -113,7 +120,7 @@ class LazyDict(MutableMapping):
 
 
 class RecalcMapper(Mapping):
-    """Opposite of LazyDict. Recalculates every time item is retrieved."""
+    """Opposite of LazyMap. Recalculates every time item is retrieved."""
     def __init__(self, keys, function: Callable):
         self.function = function        
         self._func_memory = [function]
@@ -134,6 +141,10 @@ class RecalcMapper(Mapping):
     
     def __iter__(self):
         return iter(self._keys)
+    
+    
+    def as_lazy(self):
+        return LazyMap(self._keys, self._func_memory)
     
         
     
@@ -223,9 +234,9 @@ class BaseData:
     
     
     @cached_property
-    def tables(self) -> LazyDict[TableData]:
+    def tables(self) -> LazyMap[TableData]:
         """Data dict in the form of TableData objects."""
-        d = LazyDict(self.symbol_names(), function=self.retrieve)
+        d = LazyMap(self.symbol_names(), function=self.retrieve)
         d = d.map(TableData, deep=False)
         return d
     
@@ -342,10 +353,133 @@ class YahooData(BaseData):
     
     def get_trade_dates(self):
         return read_yahoo_trade_dates()
+
+    
+def _get_indicator_name(func, args, kwargs):
+    name = func.__name__
+    
+    args = [str(a) for a in args]
+    
+    str_args = ','.join(args)
+    name += '(' + str_args
+    str_kwargs = [f'{k}={v}' for (k,v) in kwargs.items()]
+    str_kwargs = ','.join(str_kwargs)
+    if len(str_kwargs) > 0:
+        name += ', ' + str_kwargs
+    name += ')'    
+    return name
+        
+    
+class Indicators(BaseData):
+    """Create indicators for stock data `StockData` for use in backtesting. 
+
+    Parameters
+    ----------
+    stock_data : StockData, optional
+        `StockData` for which to create indicators. The default is None.
+        Eventually to generate indicators, you must assign self.stock_data.
+    """
+    
+    def __init__(self, stock_data: BaseData=None):
+
+        self.stock_data = stock_data
+        self._indicators = {}
+        self._locked = False
+        
+        
+        
+    def symbol_names(self):
+        return self.stock_data.symbol_names()
+
+
+    def set_stock_data(self, stock_data: BaseData):
+        """Set stock data."""
+        self.stock_data = stock_data
+
+        
+    def create(self, func: Callable, *args, name=None, **kwargs) -> str:
+        """Create an indicator from function of form:
+            value = func(*args, df=df, **kwargs)
+        
+        Parameters
+        ----------
+        func : Callable
+            Function to convert to indicator. It must accept a dataframe or dict 
+            as a keyword argument `df`. 
+        *args, **kwargs :
+            Additional arguments for func.
+        name : str
+            Name of indicator (Optional).
+            
+        Returns
+        -------
+        out : str
+            New name of indicator
+            
+        """
+        if self._locked:
+            raise Exception('You cannot create more indicators '
+                             'if self.get_symbol_all has been called')
+        if not callable(func):
+            raise TypeError('func must be Callable')
+            
+        if name is None:
+            name = _get_indicator_name(func, args, kwargs)
+
+        indicator1 = (func, args, kwargs)
+        self._indicators[name] = indicator1
+        return name
     
             
+    def retrieve(self, symbol: str):
+        """Calculate indicators for the given symbol."""
+        self._locked = True
+        df = self.stock_data.dataframes[symbol]
+        df2 = df[[]].copy()
+        df_len = len(df.index)
+        
+        def check_len(value, name_):
+            vlen = len(value)
+            if vlen != df_len:
+                raise ValueError(
+                    f'Indicator {name_} length {vlen} does not match '
+                    f'stock_data length {df_len} for current increment '
+                    f'for symbol {symbol}.')
+               
+        for name, idata in self._indicators.items():
+            (func, args, kwargs) = idata
+            try:
+                value = func(*args, df=df, **kwargs)                
+            except TypeError:
+                value = func(df, *args, **kwargs)
+                
+            if type(value) == tuple:
+                for jj, v in enumerate(value):
+                    name2 = name + f'[{jj}]'
+                    check_len(v, name2)
+                    df2[name2] = v
+                    
+            elif issubclass(dict, type(value)):
+                for key, v in value.items():
+                    name2 = name + f"['{key}']"
+                    check_len(v, name2)
+                    df2[name2] = v
+            else:
+                df2[name] = value
+            
+            
+        # for name, idata in self._class_indicators.items():
+        #     (cls, args, kwargs) = idata
+        #     obj = cls(*args, df=df, **kwargs)
+        #     obj_indicators = obj.indicators
+        #     for name2 in obj_indicators:
+        #         value = getattr(obj, name2)
+        #         newname = name + '.' + name2
+        #         df2[newname] = value
+                
+        return df2
     
-    
+
 
     
 y = YahooData()
@@ -353,3 +487,11 @@ date = np.datetime64('2020-01-01')
 y2 = y.filter_before(date)
 df = y2.dataframes['MSFT']
 
+
+def metric1(df):
+    out = df['Open'] * 5
+    return out, out*2
+
+indicators = Indicators(y2)
+indicators.create(metric1, name='m1')
+df2 = indicators.dataframes['MSFT']
