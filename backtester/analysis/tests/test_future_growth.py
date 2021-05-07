@@ -4,7 +4,7 @@ import pandas as pd
 from backtester.definitions import DF_ADJ_CLOSE
 from backtester.stockdata import YahooData
 from backtester import utils
-from backtester.analysis import avg_future_growth
+from backtester.analysis.buysell import avg_future_growth
  
 
 import matplotlib.pyplot as plt

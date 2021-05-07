@@ -14,8 +14,7 @@ import pdb
 
 
 def array_windows(x: np.ndarray, 
-                  window: np.int64, 
-                  skip: np.int64=np.int64(1)) -> np.ndarray:
+                  window: np.int64) -> np.ndarray:
     """Construct 2-d array for with a window interval for each x.
     
     Parameters
@@ -38,15 +37,18 @@ def array_windows(x: np.ndarray,
     
     # This is to catch a weird CPUDispatcher NULL when using numba in cProfile
     try:
-        if skip >= 2:
-            return _array_windows_skip(x, window, skip)
-        else:
-            return _array_windows(x, window)
+            return _array_windows(x, window)        
     except SystemError:
         raise NotEnoughDataError('Window size is greater than length x')
         
         
-        
+def array_windows_skip(x: np.ndarray, window:np.int64, skip=1):
+    try:
+        return _array_windows_skip(x, window, skip)
+    except SystemError:
+        raise NotEnoughDataError('Window size is greater than length x')
+
+
 @njit
 def _array_windows(x: np.ndarray, window: np.int64) -> np.ndarray:
     """Construct 2-d array for with a window interval for each x.
@@ -131,6 +133,7 @@ def trailing_percentiles(x: np.ndarray, window: np.int64):
         percentiles = np.nanpercentile(interval, pbins)
         out[ii] = np.interp(interval[-1], percentiles, pbins)
     return append_nan(out, window)
+
 
 @ignore_nan
 @njit
@@ -312,7 +315,7 @@ class TrailingStats(TrailingBase):
         closes = self._adj_close_intervals
         x = self._time_days_int_intervals
         y = np.log(closes)
-        slopes, b = self._regression(x, y)
+        slopes, b, _ = self._regression(x, y)
         intercepts = np.exp(b)
         return slopes, intercepts
         
@@ -328,7 +331,7 @@ class TrailingStats(TrailingBase):
         
     @cached_property
     def _slope_normalized_check(self):
-        m, y0 = self.linear_regression
+        m, y0, r = self.linear_regression
         y = self.rolling_avg
         return m / y
     

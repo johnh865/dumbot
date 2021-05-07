@@ -4,17 +4,25 @@ import numpy as np
 
 from backtester.backtest import Strategy, Backtest
 from backtester.stockdata import YahooData, Indicators
-from backtester.indicators import moving_avg
+from backtester.indicators import TrailingStats
 from backtester.exceptions import NoMoneyError
+from backtester.definitions import DF_ADJ_CLOSE
 from datetime import datetime
 from backtester.utils import crossover
 
 yahoo = YahooData(['DIS', 'FNILX', 'GOOG', 'VOO'])
 
+
+def rolling_avg(df, window: int):
+    ts = TrailingStats(df[DF_ADJ_CLOSE], window)
+    return ts.rolling_avg
+    
+
+
 def test1():
     class MyStrategy(Strategy):
         def init(self):
-            self.i1 = self.indicator(moving_avg, 25)
+            self.i1 = self.indicator(rolling_avg, 25)
             
             
         def next(self):
@@ -47,8 +55,8 @@ def test2():
     """Test creating indicators."""
     class MyStrat(Strategy):
         def init(self):
-            self.sma1 = self.indicator(moving_avg, 50)
-            self.sma2 = self.indicator(moving_avg, 200)
+            self.sma1 = self.indicator(rolling_avg, 50)
+            self.sma2 = self.indicator(rolling_avg, 200)
 
         def next(self):
             # If sma1 crosses above sma2, close any existing

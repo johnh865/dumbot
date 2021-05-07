@@ -519,9 +519,9 @@ class Transactions:
         self.executed_actions = []
         self.balances = []
         self.queue = deque()
-        del self._symbol_transactions_dict
-        del self.dataframe
-        del self.asset_history
+        delete_attr(self, '_symbol_transactions_dict')
+        delete_attr(self, 'dataframe')
+        delete_attr(self, 'asset_history')
     
     
     def _get_symbol_transactions_dict(self) -> dict[str, SymbolTransactions]:

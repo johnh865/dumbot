@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.stats import linregress
-from backtester.analysis.correlator import regression
+from backtester.analysis.linregress import regression
 import matplotlib.pyplot as plt
 
 def test_regress():

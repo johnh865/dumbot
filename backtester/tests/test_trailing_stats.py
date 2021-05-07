@@ -4,7 +4,12 @@ import numpy as np
 import pandas as pd 
 import matplotlib.pyplot as plt
 
-from backtester.indicators import TrailingStats, array_windows, trailing_percentiles
+from backtester.indicators import (TrailingStats, 
+                                   array_windows,
+                                   trailing_percentiles,
+                                   _array_windows)
+
+
 from backtester.definitions import DF_ADJ_CLOSE, DF_VOLUME, DF_HIGH, DF_LOW
 from datasets.symbols import ALL
 from backtester.stockdata import YahooData
@@ -140,7 +145,7 @@ def test_close_intervals():
 def test_intervals():
     
     def _time_days_int_intervals(times, window_size):
-        """Test WITHOUT NUBMA. Construct time intervals for windowing."""
+        """Test WITHOUT NUMBA. Construct time intervals for windowing."""
         tnum = len(times) - window_size
         intervals = []
         for ii in range(tnum):
@@ -153,16 +158,24 @@ def test_intervals():
     window_size = 20
     _ = array_windows(times, window_size)
     
+    
+    
     def test1():
         return array_windows(times, window_size)
     
     def test2():
         return _time_days_int_intervals(times, window_size)
     
-    time1 = timeit.timeit(test1, number=1000)
-    time2 = timeit.timeit(test2, number=1000)
-    print('Numba interval sped = ', time1)
-    print('Python interval sped = ', time2)
+    def test3():
+        return _array_windows(times, window_size)
+    
+    time1 = timeit.timeit(test1, number=400)
+    time2 = timeit.timeit(test2, number=400)
+    time3 = timeit.timeit(test3, number=400)
+    
+    print('Numba interval speed = ', time1)
+    print('Python interval speed = ', time2)
+    print('Numba 2  interval speed = ', time3)
     assert time1 < time2
 
 
@@ -222,11 +235,11 @@ def test_max_loss():
     
 
 if __name__ == '__main__':
-    # test1()
+    test1()
     test_trailing_avg()
-    # test_close_intervals()
-    # test_intervals()
+    test_close_intervals()
+    test_intervals()
     
-    # test_std()
-    # test_max_loss()
+    test_std()
+    test_max_loss()
 

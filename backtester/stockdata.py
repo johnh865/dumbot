@@ -41,7 +41,7 @@ class TableData:
         """Pandas dataframes are slow. Get dict[np.ndarray] for ~5x speed-up."""
         ii = np.searchsorted(self.times, date)
         v = self.values[0 : ii].T
-        return dict(zip(self.names, v))
+        return dict(zip(self.columns, v))
 
 
     def array_before(self, date: np.datetime64):
@@ -382,9 +382,10 @@ class Indicators(BaseData):
             try:
                 value = func(df, *args, **kwargs)
             except TypeError:
-                value = func(*args, df=df, **kwargs)
-            except TypeError:
-                value = func(*args, **kwargs)
+                try:
+                    value = func(*args, df=df, **kwargs)
+                except TypeError:
+                    value = func(*args, **kwargs)
                 
                 
             if type(value) == tuple:
