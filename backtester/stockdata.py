@@ -1,9 +1,13 @@
-# import pdb
+# -*- coding: utf-8 -*-
+
 import datetime
+import copy
+
 from functools import lru_cache, cached_property
 from abc import abstractmethod, ABCMeta
 from typing import Callable
-from typing import Union
+from typing import Union, NamedTuple
+from collections.abc import MutableMapping, Mapping
 
 import pandas as pd
 import numpy as np
@@ -16,12 +20,143 @@ from datasets.yahoo import (
     )
 from backtester.exceptions import DataError, NotEnoughDataError
 
+
+class LazyMap(MutableMapping):
+    """Lazy dictionary that applies a function only when the item is retrieved.
+    
+    Parameters
+    ----------
+    keys : 
+        Dictionary keys
+    function : Callable or list[Callable]
+        Function to apply onto keys as `out = function(key)`
+    """
+    def __init__(self, keys, function: Callable, values=None):
+        self.function = function
+        
+        if hasattr(function, '__iter__'):
+            functions = [function for _ in keys]
+        else:
+            functions = [[function] for _ in keys]
+        
+        self._func_dict = dict(zip(keys, functions))
+        self._dict = {}
+        self._func_memory = [function]
+        
+        if values is not None:
+            self._dict = dict(zip(keys, values))
+        
+        
+    def __getitem__(self, key):
+    
+        functions = self._func_dict[key]
+        if functions:
+            try:
+                out = self._dict[key]
+            except KeyError:
+                out = key
+
+            for func in functions:
+                out = func(out)
+                
+            self._dict[key] = out
+            self._func_dict[key] = []
+            return out            
+            
+        else:
+            return self._dict[key]
+        
+        
+    def __setitem__(self, key, value):
+        self._dict[key] = value
+        self._func_dict[key] = []
+    
+        
+    def __delitem__(self, key):
+        del self._dict[key]
+        del self._func_dict[key]
+        
+        
+    def __iter__(self):
+        return iter(self._dict)
+    
+    
+    def __len__(self):
+        return len(self._dict)
+        
+    
+    def apply(self, func: Callable):
+        """Apply a function on all keys."""
+        
+        if hasattr(func, '__iter__'):
+            self._func_memory.extend(func)
+            for key in self._func_dict.keys():
+                self._func_dict[key].extend(func)
+                
+        else:
+            self._func_memory.append(func)
+            for key in self._func_dict.keys():
+                self._func_dict[key].append(func)
+                
+                
+    def map(self, func, deep=True):
+        """Create copy and map a function on all keys."""
+        d = self.copy(deep=deep)
+        
+        d.apply(func)
+        return d
+    
+            
+    def add(self, key):
+        self._func_dict[key] = self._func_memory
+        
+        
+    def copy(self, deep=True):
+        if deep:
+            return copy.deepcopy(self)
+        else:
+            return copy.copy(self)
+        
+
+
+class RecalcMapper(Mapping):
+    """Opposite of LazyMap. Recalculates every time item is retrieved."""
+    def __init__(self, keys, function: Callable):
+        self.function = function        
+        self._func_memory = [function]
+        self._keys = keys
+        
+
+    def __getitem__(self, key):
+        functions = self._func_memory
+        out = key
+        for func in functions:
+            out = func(out)
+        return out
+    
+    
+    def __len__(self):
+        return len(self._keys)
+    
+    
+    def __iter__(self):
+        return iter(self._keys)
+    
+    
+    def as_lazy(self):
+        return LazyMap(self._keys, self._func_memory)
+    
+        
+    
 class TableData:
-    """Methods to retrieve symbol data faster."""
-    def __init__(self, df: pd.DataFrame):
-        df = df.sort_index()
+    """Methods to retrieve data faster from a dataframe."""
+    def __init__(self, df: pd.DataFrame, sort=True):
+        
+        if sort:
+            df = df.sort_index()
         self.times = df.index
         self.df = df
+        self.dataframe = df
         self.values = df.values
         try:
             self.columns = df.columns.values.astype(str)
@@ -32,29 +167,63 @@ class TableData:
         self._max_date = np.max(self.times)
         
         
-    def dataframe_before(self, date: np.datetime64):
+    def date_index(self, date: np.datetime64):
+        """Get index location of data for a given date."""
+        return np.searchsorted(self.times, date)
+    
+    
+    def iloc(self, index):
+        """Set index locations."""
+        df = self.iloc_dataframe(index)
+        return TableData(df, sort=False)
+    
+    
+    def iloc_dataframe(self, index):
+        """Set index locations for dataframe"""
+        return self.df.iloc[index]
+    
+    
+    def iloc_dict(self, index):
+        """Set index locations for dict"""
+        v = self.values[index].T
+        return dict(zip(self.columns, v))
+    
+    
+    def iloc_array(self, index):
+        """Set index locations for array"""
+        return self.values[index]
+
+        
+    def dataframe_up_to(self, date: np.datetime64):
         ii = np.searchsorted(self.times, date)
-        return self.df.iloc[0 : ii]
+        return self.df.iloc[0 : ii + 1]
     
     
-    def dict_before(self, date: np.datetime64):
+    def dict_up_to(self, date: np.datetime64):
         """Pandas dataframes are slow. Get dict[np.ndarray] for ~5x speed-up."""
         ii = np.searchsorted(self.times, date)
-        v = self.values[0 : ii].T
+        v = self.values[0 : ii + 1].T
         return dict(zip(self.columns, v))
 
 
-    def array_before(self, date: np.datetime64):
+    def array_up_to(self, date: np.datetime64):
         """Pandas dataframes are slow. Get values for ~10x speed-up."""
         ii = np.searchsorted(self.times, date)
-        return self.values[0 : ii]
+        return self.values[0 : ii + 1]
     
-
-
-    def array_right_before(self, date: np.datetime64):
-        """Get slice of values"""
+    def array_at(self, date: np.datetime64):
         ii = np.searchsorted(self.times, date)
-        return self.values[ii - 1]
+        return self.values[ii]
+    
+    # def dataframe_after(self, date: np.datetime64):
+    #     ii = np.searchsorted(self.times, date)
+    #     return self.df.iloc[ii :]    
+    
+    
+    # def array_right_before(self, date: np.datetime64):
+    #     """Get slice of values"""
+    #     ii = np.searchsorted(self.times, date)
+    #     return self.values[ii - 1]
     
     
     def exists_at(self, date: np.datetime64) -> bool:
@@ -64,33 +233,57 @@ class TableData:
             return True
         return False
     
-
+    
+    
+    
 class BaseData(metaclass=ABCMeta):
+    """Base class for creating stock data."""
+    
+    
     @abstractmethod
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError('This method needs to be implemented by user')
-        
-
+    def retrieve_symbol_names(self) -> list[str]:
+        """Method to retrieve all available symbols."""
+        raise NotImplementedError('This method needs to be implemented by user')    
+    
+    
     @abstractmethod
-    def get_symbol_names(self) -> list[str]:
-        """Get all available symbols."""
-        raise NotImplementedError('This method needs to be implemented by user')
-        
-        
-        
-    @abstractmethod
-    def retrieve_symbol(self, symbol: str) -> pd.DataFrame:
+    def retrieve(self, symbol: str) -> pd.DataFrame:
         """Get all available dataframe data for a stock ticker symbol."""
         raise NotImplementedError('This method needs to be implemented by user')
+        
+        
+    @cached_property
+    def symbol_names(self) -> list[str]:
+        """Use this to set which symbol names to consider."""
+        return self.retrieve_symbol_names()
+        
+        
+    @cached_property
+    def dataframes(self) -> RecalcMapper[pd.DataFrame]:
+        """Data dict in form of Pandas DataFrame."""
 
+        def func1(name: str):
+            return self.tables[name].dataframe
+
+        r = RecalcMapper(self.symbol_names, function=func1)
+        return r
+    
+    
+    @cached_property
+    def tables(self) -> LazyMap[TableData]:
+        """Data dict in the form of TableData objects."""
+        d = LazyMap(self.symbol_names, function=self.retrieve)
+        d = d.map(TableData, deep=False)
+        return d
+    
         
     def existing_symbols(self, date: np.datetime64) -> list[str]:
         """Sometimes data will not be available for certain dates. Retrieve
         the symbols that exist for a given time."""
-        names = self.get_symbol_names()
+        names = self.symbol_names
         out = []
         for name in names:
-            table = self._get_symbol_data(name)
+            table = self.tables[name]
             if table.exists_at(date):
                 out.append(name)
         return out
@@ -99,93 +292,26 @@ class BaseData(metaclass=ABCMeta):
     def unlisted_symbols(self, date: np.datetime64) -> list[str]:
         """Sometimes data will not be available for certain dates. Retrieve
         the symbols that DO NOT exist for a given time."""    
-        names = self.get_symbol_names()
+        names = self.symbol_names
         out = []
         for name in names:
-            table = self._get_symbol_data(name)
+            table = self.tables[name]
             if not table.exists_at(date):
                 out.append(name)
         return out
-
-
-
-        
-        
-    @lru_cache(maxsize=1000)
-    def _get_symbol_data(self, symbol: str) -> TableData:
-        """Construct SymbolData."""
-        df = self.retrieve_symbol(symbol)
-        return TableData(df)
-            
-        
-    def get_symbol_all(self, symbol:str) -> pd.DataFrame:
-        """Get all available dataframe data for a stock ticker symbol"""
-        return self._get_symbol_data(symbol).df
-        
-    
-    def get_symbol_before(self, symbol: str, date: np.datetime64) -> pd.DataFrame:
-        """Retrieve data before a date."""
-        sd = self._get_symbol_data(symbol)
-        return sd.dataframe_before(date)
-        
-    
-    def get_symbols_before(self, date: datetime.datetime) -> dict:
-        """Get dataframes for multiple symbols before date."""
-        out = {}
-        symbols = self.get_symbol_names()
-        for symbol in symbols:
-            out[symbol] = self.get_symbol_before(symbol, date)
-        return out
-
-    
-    def __getitem__(self, symbol: str):
-        return self._get_symbol_data(symbol).df
     
     
-
-            
-    
-    
-    
-    # def get_before(self, symbol: str, name: str, date: np.datetime64):
-    #     """Return values for a given symbol and indicator name"""
-    #     df = self.get_symbol_before(symbol=symbol, date=date)
-    #     return df[name]
-    
-    
-    @lru_cache(maxsize=500)
-    def get_dict_before(self, symbol: str, date: np.datetime64) -> np.ndarray:
-        """Fast way to return dataframe values before a date."""
-        symbol_data = self._get_symbol_data(symbol)
-        return symbol_data.dict_before(date)
-    
-    
-    def get_all(self) -> dict[pd.DataFrame]:
-        """Convert all data to dict[pd.DataFrame]."""
-        symbols = self.get_symbol_names()
-        new = {}
-        for symbol in symbols:
-            try:
-                new[symbol] = self.get_symbol_all(symbol)
-            except NotEnoughDataError:
-                pass
-        return new
-    
-    
-    def get_column_from_all(self, column: str) -> pd.DataFrame:
+    def extract_column(self, column: str) -> pd.DataFrame:
         """From all symbols retrieve the specified data column"""
-        symbols = self.get_symbol_names()
+        symbols = self.symbol_names
         symbol = symbols[0]
-        table = self._get_symbol_data(symbol)
-        columns = table.columns
-        # cloc = np.where(columns == column)[0][0]
+        table = self.tables[symbol]
         
         new = []
         for symbol in symbols:
             try:
-                table = self._get_symbol_data(symbol)
-                # values = table.values[:, cloc]
-                series = table.df[column]
+                table = self.tables[symbol]
+                series = table.dataframe[column]
                 series.name = symbol
                 new.append(series)
             except NotEnoughDataError:
@@ -193,57 +319,105 @@ class BaseData(metaclass=ABCMeta):
             
         df = pd.concat(new, axis=1, join='outer',)
         return df
-       
     
-class BaseStockData(BaseData):        
-    @abstractmethod
-    def get_trade_dates(self) -> np.ndarray:
-        """The tradeable dates in the stock database"""
-        raise NotImplementedError('This method needs to be implemented by user')
-        
-        
-    # @cached_property
-    # def _existence_df(self):
-    #     """Get trade dates where symbol exists or not."""
-    #     dates = self.get_trade_dates()
-    #     symbols = self.get_symbol_names()
-        
-    #     new = np.zeros((len(dates), len(symbols)), dtype=bool)
-        
-    #     for jj, symbol in enumerate(symbols):
-    #         df = self.retrieve_symbol(symbol)
-    #         sdates = df.index.values
-    #         ii = np.searchsorted(dates, sdates)
-            
-    #         assert np.all(dates[ii] == sdates)
-    #         new[ii, jj] = True
-            
-    #     return pd.DataFrame(data=new, index=dates, columns=symbols)
     
+    def map(self, func: Callable):
+        new = copy.copy(self)
+        new.tables = self.tables.map(func)
+        return new
+    
+    
+    def filter_dates(self, 
+                     start: np.datetime64=None,
+                     end: np.datetime64=None) -> 'BaseData':
+        """Return data within certain dates. 
 
-            
-            
+        Parameters
+        ----------
+        start : np.datetime64, optional
+            Starting date. The default is None to start at index 0
+        end : np.datetime64, optional
+            Ending date. The default is None to end at index -1
+
+        Returns
+        -------
+        BaseData
+        """
+        def func(table: TableData):
+            if start is not None:
+                i1 = table.date_index(start)
+            else:
+                i1 = 0
+                
+            if end is not None:
+                i2 = table.date_index(end) + 1
+            else:
+                i2 = None
+            mask = slice(i1, i2)
+            return table.iloc(mask)
+        
+        new = copy.deepcopy(self)
+        new.tables = self.tables.map(func)
+        return new
+
+    
+    # def filter_before(self, date: np.datetime64) -> 'BaseData':
+    #     """Return data before a certain date. 
+
+    #     Parameters
+    #     ----------
+    #     date : np.datetime64
+    #         Cutoff date.
+
+    #     Returns
+    #     -------
+    #     BaseData
+    #     """        
+        
+    #     def func(table: TableData):
+    #         return TableData(table.dataframe_before(date), sort=False)
+        
+    #     new = copy.deepcopy(self)
+    #     new.tables = self.tables.map(func)
+    #     return new
+    
+    # def filter_after(self, date: np.datetime64) -> 'BaseData':
+    #     """Return data after a certain date. 
+
+    #     Parameters
+    #     ----------
+    #     date : np.datetime64
+    #         Cutoff date.
+
+    #     Returns
+    #     -------
+    #     BaseData
+    #     """
+        
+    #     def func(table: TableData):
+    #         return TableData(table.dataframe_after(date), sort=False)
+        
+    #     new = copy.deepcopy(self)
+    #     new.tables = self.tables.map(func)
+    #     return new    
+    
+    
+    def filter_symbols(self, symbols:list[str]):
+        self.symbol_names = symbols
+        keep = set(symbols)
+        old = set(self.symbol_names)
+        diff = old.difference(keep)
+        
+        new = copy.deepcopy(self)
+        for key in diff:
+            del new.tables[key]
+        return new
+        
         
     
-class DictData(BaseData):
-    def __init__(self, d: Union[dict[pd.DataFrame], BaseData]):
-        
-        if hasattr(d, 'get_all'):
-            self.dict = d.get_all()
-        else:
-            self.dict = d
-        
-        
-    def retrieve_symbol(self, symbol: str):
-        return self.dict[symbol]
     
     
-    def get_symbol_names(self):
-        return list(self.dict.keys())
-            
-           
-    
-class YahooData(BaseStockData):
+class YahooData(BaseData):
     """Retrieve data from Yahoo online dataset."""
     def __init__(self, symbols=()):
         if len(symbols) == 0:
@@ -252,18 +426,18 @@ class YahooData(BaseStockData):
         return
     
     
-    def retrieve_symbol(self, symbol: str):
+    def retrieve(self, symbol: str):
         return read_yahoo_dataframe(symbol)
     
     
-    def get_symbol_names(self):
+    def retrieve_symbol_names(self):
         return self.symbols
     
     
     def get_trade_dates(self):
         return read_yahoo_trade_dates()
-    
 
+    
 def _get_indicator_name(func, args, kwargs):
     name = func.__name__
     
@@ -278,7 +452,7 @@ def _get_indicator_name(func, args, kwargs):
     name += ')'    
     return name
         
-
+    
 class Indicators(BaseData):
     """Create indicators for stock data `StockData` for use in backtesting. 
 
@@ -290,19 +464,15 @@ class Indicators(BaseData):
     """
     
     def __init__(self, stock_data: BaseData=None):
-        """
 
-
-        """
         self.stock_data = stock_data
         self._indicators = {}
-        self._class_indicators = {}
         self._locked = False
         
         
         
-    def get_symbol_names(self):
-        return self.stock_data.get_symbol_names()
+    def retrieve_symbol_names(self):
+        return self.stock_data.symbol_names
 
 
     def set_stock_data(self, stock_data: BaseData):
@@ -342,30 +512,12 @@ class Indicators(BaseData):
         indicator1 = (func, args, kwargs)
         self._indicators[name] = indicator1
         return name
-        
-        
-    def create_obj(self, cls: object, *args, name=None, **kwargs):
-        """Create an indicator from an object of form:
+    
             
-            > obj1 = cls(*args, df=df, **kwargs)
-            > indicators = obj1.indicators 
-            > value1 = obj1.attr1
-            > value2 = obj1.attr2
-            > value3 = obj1.attr3
-            > ....
-        """
-        if self._locked:
-            raise Exception('You cannot create more indicators '
-                             'if self.get_symbol_all has been called')
-        if name is None:
-            name = _get_indicator_name(cls, args, kwargs)
-        self._class_indicators[name] = (cls, args, kwargs)
-            
-            
-    def retrieve_symbol(self, symbol: str):
+    def retrieve(self, symbol: str):
         """Calculate indicators for the given symbol."""
         self._locked = True
-        df = self.stock_data.get_symbol_all(symbol)
+        df = self.stock_data.dataframes[symbol]
         df2 = df[[]].copy()
         df_len = len(df.index)
         
@@ -380,13 +532,9 @@ class Indicators(BaseData):
         for name, idata in self._indicators.items():
             (func, args, kwargs) = idata
             try:
-                value = func(df, *args, **kwargs)
+                value = func(*args, df=df, **kwargs)                
             except TypeError:
-                try:
-                    value = func(*args, df=df, **kwargs)
-                except TypeError:
-                    value = func(*args, **kwargs)
-                
+                value = func(df, *args, **kwargs)
                 
             if type(value) == tuple:
                 for jj, v in enumerate(value):
@@ -403,21 +551,15 @@ class Indicators(BaseData):
                 df2[name] = value
             
             
-        for name, idata in self._class_indicators.items():
-            (cls, args, kwargs) = idata
-            obj = cls(*args, df=df, **kwargs)
-            obj_indicators = obj.indicators
-            for name2 in obj_indicators:
-                value = getattr(obj, name2)
-                newname = name + '.' + name2
-                df2[newname] = value
+        # for name, idata in self._class_indicators.items():
+        #     (cls, args, kwargs) = idata
+        #     obj = cls(*args, df=df, **kwargs)
+        #     obj_indicators = obj.indicators
+        #     for name2 in obj_indicators:
+        #         value = getattr(obj, name2)
+        #         newname = name + '.' + name2
+        #         df2[newname] = value
                 
         return df2
     
 
-
-
-    
-    
-
-    

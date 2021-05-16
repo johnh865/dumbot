@@ -17,7 +17,7 @@ from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
 from backtester.stockdata import BaseData, Indicators
 from backtester.exceptions import NoMoneyError, TradingError, NotEnoughDataError
-from backtester.definitions import SMALL_DOLLARS
+from backtester.definitions import SMALL_DOLLARS, DF_ADJ_CLOSE
 from backtester.indicators import TrailingStats
 
 SMALL_TIME_SECONDS = 1
@@ -34,7 +34,7 @@ class Strategy(metaclass=ABCMeta):
     
     def __init__(self, transactions: Transactions):
         self._transactions = transactions
-        self._indicators = Indicators() 
+        self._indicators = [] 
         
         
     # def _set_indicators(self, indicators: Indicators=None):
@@ -154,7 +154,7 @@ class Strategy(metaclass=ABCMeta):
     @cached_property
     def stock_data(self) -> dict[pd.DataFrame]:
         """dict[DataFrame] : Dataframes for each symbol for the current increment."""
-        return self._indicators.stock_data.get_symbols_before(self._date)  
+        return self._indicators.stock_data.filter_dates(end=self._date)  
 
     
     @cached_property
@@ -169,10 +169,64 @@ class Strategy(metaclass=ABCMeta):
         return self._indicators.stock_data.unlisted_symbols(self.date)
     
     
-
-    
-    
     def indicator(self,
+                  func: Callable, 
+                  *args,
+                  name: str=None, 
+                  **kwargs) -> "_IndicatorValue":
+        """Create an indicator and return a `_IndicatorValue.
+
+        Parameters
+        ----------
+        func : Callable
+            Function to calculate indicator. `func` must accept a dataframe
+            using keyword argument `df`:
+                
+            >>> value = func(*args, df=df, **kwargs)
+            
+            df : pd.DataFrame
+                Pandas dataframe of data retrieved from `StockData` object
+                found in `Backtest`.
+            value : dict or np.ndarray
+                Indicator values for each row of dataframe. 
+            
+        *args : 
+            Positional arguments for `func`.
+        name : str, optional
+            Name of indicator for dataframes. The default is None.
+        **kwargs : 
+            Keyword arguments for `func`.
+
+        Returns
+        -------
+        IndicatorValue
+            Object used to retrieve indicator values in `self.next` for
+            each stock symbol. For example:
+            
+            .. code-block :: python
+                        
+                def init(self):
+                    self.my_indicator = self.indicator(func1)
+                    
+                def next(self):
+                    symbol = 'MSFT'
+                    value = self.my_indicator(symbol)
+
+        """        
+        indicator = Indicators()
+        name = indicator.create(func, *args, name=name, **kwargs)
+        self._indicators.append(indicator)
+        return IndicatorValue(indicators=indicator, strategy=self)
+    
+    
+    def set_indicator_data(self, stock_data: BaseData):
+        """Use to set stock data used for indicator calculation."""
+        indicators = self._indicators
+        for indicator in indicators:
+            indicator.set_stock_data(stock_data)
+        
+    
+    def __backup_indicator(self,
                   func: Callable, 
                   *args,
                   name: str=None, 
@@ -234,7 +288,42 @@ class Strategy(metaclass=ABCMeta):
         """Days since the beginning of simulation for the current simulation increment."""
         return self._days_since_start
 
+class IndicatorValue:
+    """Store reference to indicator, retrieve the indicator data for 
+    a given symbol."""    
+    def __init__(self,
+                 indicators: Indicators,
+                 strategy: Strategy):
+        self.indicators = indicators
+        self.strategy = strategy
+        
+        
+    def array(self, symbol: str):
+        date = self.strategy.date
+        table = self.indicators.tables[symbol]
+        array = table.array_up_to(date)
+        return array
     
+    
+    def dataframe(self, symbol: str):
+        date = self.strategy.date
+        table = self.indicators.tables[symbol]
+        df = table.dataframe_up_to(date)
+        return df
+    
+    
+    @cached_property
+    def columns(self):
+        key = next(iter(self.indicators.tables))
+        table = self.indicators.tables[key]
+        return table.columns
+        
+    
+    
+    def __call__(self, symbol: str):
+        return self.array(symbol)
+    
+        
     
 class _IndicatorValue:
     """Store reference to indicator, retrieve the indicator data for 
@@ -245,14 +334,29 @@ class _IndicatorValue:
         self.name = name
         self.indicators = indicators
         self.strategy = strategy
+
         
-        
-    def __call__(self, symbol: str):
-        """Retrieve indicator value for given symbol."""
-        date = self.strategy.date
-        dict1 = self.indicators.get_dict_before(symbol, date)
-        return dict1[self.name]
+    @cached_property
+    def _name_loc(self):
+        symbol = next(iter(self.indicators.tables))
+        table = self.indicators.tables[symbol]
+        columns = table.columns
+        loc = columns.tolist().index(self.name)
+        return loc
     
+    
+    def __call__(self, symbol: str):
+        """Retrieve indicator value for given symbol up to current date."""
+        return self.array(symbol)
+    
+    
+    def array(self, symbol: str):
+        date = self.strategy.date
+        table = self.indicators.tables[symbol]
+        array = table.array_up_to(date)
+        return array[:, self._name_loc]
+    
+            
     
     def get_last(self, symbol: str, default=np.nan):
         try:
@@ -302,13 +406,15 @@ class Backtest:
             commission: float = .0,
             start_date: np.datetime64 = None,
             end_date: np.datetime64 = None,
+            price_name = DF_ADJ_CLOSE,
             ):
 
         self.stock_data = stock_data
         self.transactions = Transactions(
             stock_data = stock_data,
             init_funds = cash,
-            commission = commission
+            commission = commission,
+            price_name = price_name,
         )
         self.strategy = strategy(self.transactions)
         self.start_date = start_date
@@ -350,16 +456,13 @@ class Backtest:
     def reset(self, time_index=0):
         """Reset backtester."""
         self.strategy : Strategy
-        self.strategy._indicators.set_stock_data(self.stock_data)
         self.strategy.init()
+        self.strategy.set_indicator_data(self.stock_data)
         self.transactions.reset()
         self.transactions.hold(self.active_days[0])
         self.time_index = time_index
         
-        
-    
-        
-        
+
     def step(self):
         """Increment one step of backtest simulation."""
         ii = self.time_index
@@ -405,7 +508,7 @@ class BacktestStats:
         d[self.COLUMN_DATE] = dates
         for symbol in symbols:
             st = transactions.get_symbol_transactions(symbol)
-            d[symbol] = st.get_share_valuation(dates)
+            d[symbol] = st.get_share_valuations(dates)
             
         df = pd.DataFrame(d)
         df = df.set_index(self.COLUMN_DATE, drop=True)
@@ -435,7 +538,7 @@ class BacktestStats:
         # Get stock price
         for symbol in symbols:
             st = transactions.get_symbol_transactions(symbol)
-            price = st.get_adj_price(dates)
+            price = st.get_price(dates)
             d[symbol] = price / price[0]
         
         # Get our equity
@@ -459,7 +562,7 @@ class BacktestStats:
             commission=transactions.commission
             )        
         
-        prices = st.get_adj_price(dates2)
+        prices = st.get_price(dates2)
         
         return prices[-1] / prices[0]
     
@@ -481,7 +584,7 @@ class BacktestStats:
             stock_data=transactions.stock_data,
             commission=transactions.commission
             )   
-        prices = st.get_adj_price(index)
+        prices = st.get_price(index)
         series2 = pd.Series(data=prices, index=index)
 
         r2 = TrailingStats(series2, window_size=window).return_ratio

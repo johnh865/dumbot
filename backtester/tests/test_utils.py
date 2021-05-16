@@ -105,9 +105,9 @@ def test_values_between5():
 
     
 if __name__ == '__main__':
-    test_floor_to_date1()
-    test_floor_to_date2()
-    test_floor_to_date3()
+    # test_floor_to_date1()
+    # test_floor_to_date2()
+    # test_floor_to_date3()
     test_values_between()
     test_values_between2()
     test_values_between3()

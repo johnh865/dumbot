@@ -128,9 +128,10 @@ def test_equity():
     return
         
 
-
+    
 
 if __name__ == '__main__':
-    test_transations()
-    test_interday()
-    test_equity()
+    # test_transations()
+    # test_interday()
+    # test_equity()
+    test_shares()

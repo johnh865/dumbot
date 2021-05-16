@@ -9,9 +9,20 @@ scipy
 backtesting
 pytest
 numba
-spyder=4.2.5
+spyder
 bs4
 python-dotenv
 
 # Machine learning stuff
 sklearn
+tensorboard
+tensorboardX
+
+# Pytorch
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch==1.8.1+cu102
+torchvision==0.9.1+cu102
+torchaudio===0.8.1 
+
+
+git+https://github.com/johnh865/globalcache.git

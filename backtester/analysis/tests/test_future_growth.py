@@ -15,7 +15,7 @@ def test_future():
     
     symbol = 'VOO'
     y = YahooData([symbol])
-    df = y.get_symbol_all(symbol)    
+    df = y.dataframes[symbol]
     df = df.iloc[-1000::2]
     
     series = df[DF_ADJ_CLOSE]

@@ -93,14 +93,15 @@ from backtester.stockdata import YahooData
 from backtester.definitions import DF_ADJ_CLOSE
 
 yahoo = YahooData()
-s1 = yahoo.get_symbol_all('GOOG')[DF_ADJ_CLOSE]
-s2 = yahoo.get_symbol_all('MSFT')[DF_ADJ_CLOSE]
-s3 = yahoo.get_symbol_all('SPY')[DF_ADJ_CLOSE]
+s1 = yahoo.dataframes['GOOG'][DF_ADJ_CLOSE]
+s2 = yahoo.dataframes['MSFT'][DF_ADJ_CLOSE]
+s3 = yahoo.dataframes['SPY'][DF_ADJ_CLOSE]
 
 r1 = RegressionSeries(s1, s2, 30)
 r2 = RegressionSeries(s1, s3, 30)
 
 plt.subplot(2,2,1,)
+plt.title('Correlation Coeff vs Time')
 plt.plot(r1.index, r1.r, label='GOOG-MSFT')
 plt.plot(r2.index, r2.r, label='GOOG-SPY')
 plt.legend()

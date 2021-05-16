@@ -15,17 +15,46 @@ yahoo = YahooData(['DIS', 'FNILX', 'GOOG', 'VOO'])
 
 def rolling_avg(df, window: int):
     ts = TrailingStats(df[DF_ADJ_CLOSE], window)
-    return ts.rolling_avg
     
+    out = ts.rolling_avg
+    out[np.isnan(out)] = 0
+    return out
+    
+
+def my_indicators(df, window: int):
+    ts = TrailingStats(df[DF_ADJ_CLOSE], window)
+    i1 = ts.rolling_avg
+    i2 = ts.exp_growth
+    
+    i1[np.isnan(i1)] = 0
+    i2[np.isnan(i2)] = 0
+    
+    return i1, i2
 
 
 def test1():
+    """Test strategy creation and indicator creation."""
     class MyStrategy(Strategy):
         def init(self):
             self.i1 = self.indicator(rolling_avg, 25)
+            self.i2 = self.indicator(my_indicators, 40)
             
             
         def next(self):
+            
+            # Attempt to retrieve indicator data
+            i1_data = self.i1('DIS')
+            i2_data = self.i2('DIS')
+            i2_df = self.i2.dataframe('DIS')
+            columns = self.i2.columns
+            
+            assert np.all(columns == i2_df.columns)
+            assert np.all(i2_df.values == i2_data)
+            
+            # Make sure last date of indicator data is the current date. 
+            assert i2_df.index[-1] == self.date
+            
+            
             if self.days_since_start % 30 == 0:
                 try:
                     print(f'Available cash {self.available_funds:.2f}')
@@ -52,7 +81,7 @@ def test1():
     
     
 def test2():
-    """Test creating indicators."""
+    """Test creating indicators for SMA."""
     class MyStrat(Strategy):
         def init(self):
             self.sma1 = self.indicator(rolling_avg, 50)
@@ -117,6 +146,9 @@ def test_buy_hold():
                 portion = self.available_funds / num
                 for symbol in symbols:
                     self.buy(symbol, portion)
+                    
+                    
+
             return
     
     # Initialize test

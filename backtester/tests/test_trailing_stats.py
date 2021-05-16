@@ -32,7 +32,7 @@ def test1():
     # df = get_data.read_dataframe('ROK')
     
     y = YahooData([symbols[0]])
-    df = y.get_symbol_all(symbols[0])
+    df = y.dataframes[symbols[0]]
     
     df1 = df.iloc[-50:]
     series = df1[DF_ADJ_CLOSE]
@@ -101,7 +101,9 @@ def test_trailing_avg():
     
     symbol = 'VOO'
     y = YahooData([symbol])
-    df = y.get_symbol_all(symbol)    
+    df = y.dataframes[symbol]
+    
+    
     series = df[DF_ADJ_CLOSE].iloc[-100:]
     window = 21
     ts = TrailingStats(series, window)
@@ -128,7 +130,7 @@ def test_close_intervals():
     
     symbol = 'VOO'
     y = YahooData([symbol])
-    df = y.get_symbol_all(symbol).iloc[-400:]
+    df = y.dataframes[symbol].iloc[-400:]
     series = df[DF_ADJ_CLOSE]
 
     window_size = 11
@@ -182,7 +184,7 @@ def test_intervals():
 
 def test_std():
     y = YahooData()
-    df = y['VOO']
+    df = y.dataframes['VOO']
     
     
     date1 = np.datetime64('2020-01-01')
@@ -218,7 +220,7 @@ def test_std():
 
 def test_max_loss():
     y = YahooData()
-    df = y['VOO']
+    df = y.dataframes['VOO']
     
     
     date1 = np.datetime64('2020-01-01')

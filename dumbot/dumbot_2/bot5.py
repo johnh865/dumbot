@@ -32,11 +32,11 @@ import matplotlib.pyplot as plt
 
 
 yahoo = YahooData()
-symbols = yahoo.get_symbol_names()
+symbols = yahoo.symbol_names
 rs = np.random.default_rng(5)
 rs.shuffle(symbols)
 
-STOCKS = symbols[200:300]
+STOCKS = symbols[0:60]
 STOCKS.append('SPY')
 STOCKS.append('VOO')
 # STOCKS.append('GOOG')
@@ -46,15 +46,15 @@ STOCKS = np.array(STOCKS)
 
 def post1(df:pd.DataFrame):
     series = df[DF_ADJ_CLOSE]
-    ts = TrailingStats(series, 252*3)
+    ts = TrailingStats(series, 252*5)
     stat1 = ts.exp_growth
     return stat1
 
-yahoo.symbols = STOCKS
+yahoo.symbol_names = STOCKS
 indicator = Indicators(yahoo)
 indicator.create(post1)
 
-df = indicator.get_column_from_all('post1()')
+df = indicator.extract_column('post1()')
 table = TableData(df)
 index_spy = np.where(df.columns == 'SPY')[0][0]
 
@@ -130,8 +130,8 @@ if __name__ == '__main__':
         strategy=Strat1, 
         cash=100, 
         commission=.002,
-        start_date=datetime.datetime(2001, 1, 1),
-        end_date=datetime.datetime(2021, 1, 1),
+        start_date=datetime.datetime(2016, 1, 1),
+        end_date=datetime.datetime(2021, 2, 1),
         )
     bt.run()
     perf = bt.stats.performance

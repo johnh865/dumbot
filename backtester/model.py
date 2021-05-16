@@ -24,7 +24,7 @@ from backtester.definitions import SMALL_DOLLARS
 from datasets.symbols import ALL
 from backtester.stockdata import BaseData
 from backtester.utils import dates2days, floor_to_date
-from backtester.utils import interp_const_after, delete_attr
+from backtester.utils import InterpConstAfter, delete_attr
 from backtester.exceptions import NoMoneyError, TradingError
 from backtester import utils
 from backtester.exceptions import DataError
@@ -164,7 +164,7 @@ class SymbolTransactions:
                  stock_data: BaseData,
                  actions: list[Action]=(), 
                  commission=0.0,
-                 close_name: str=DF_ADJ_CLOSE
+                 price_name: str=DF_ADJ_CLOSE
                  ):
         """        
         Parameters
@@ -180,14 +180,14 @@ class SymbolTransactions:
 
         """
         
-        self.close_name = close_name
+        self.price_name = price_name
         self.symbol = symbol
         self.commission = commission
         self.queue = deque(actions)
         self.executed_actions = []
         # self.df = read_dataframe(symbol)
         
-        self.df = stock_data.get_symbol_all(symbol)
+        self.df = stock_data.dataframes[symbol]
         self.execute()
         
         
@@ -238,7 +238,7 @@ class SymbolTransactions:
         #     return dates1[ii]
         # except IndexError:
         #     symbol = self.symbol
-        #     s = f'Data "{self.close_name}" not found for {dates} for symbol {symbol}.'
+        #     s = f'Data "{self.price_name}" not found for {dates} for symbol {symbol}.'
         #     raise DataError(s)
         
     
@@ -264,40 +264,75 @@ class SymbolTransactions:
     def get_next_close(self, date: np.ndarray) -> np.ndarray:
         """Get next close (adjusted) price given `date`."""
         next_dates = self.get_next_trading_date(date)
-        dates = self.df.index
-        values = self.df[self.close_name]        
-        return interp_const_after(dates, values, next_dates)
-    
-    
-    def _get_next_close(self, date):
-        """Get next close (adjusted) price given `date`."""
-        date = np.datetime64(date)
-        date = floor_to_date(date)
-        try:
-            out = self.df.loc[date]
-        except KeyError:
-            date1 = self.get_next_trading_date(date)
-            
-            warn(
-                f'Date {date} was not found, probably not a trading day.'
-                f' New date is {date1}.'
-                )
-            return self._get_next_close(date1)
+        return self._price_interpolator(next_dates)
+        # dates = self.df.index
+        # values = self.df[self.price_name]   
         
-        return out[self.close_name], date    
+        # return 
+        # return interp_const_after(dates, values, next_dates)
     
-   
     
+    @cached_property
+    def _price_interpolator(self):
+        dates = self.df.index.values
+        values = self.df[self.price_name].values
+        return InterpConstAfter(dates, values)
+
     
-    def get_shares(self, dates: np.ndarray) -> np.ndarray:
-        """Get the number of invested shares for given dates."""
+    @cached_property
+    def _share_interpolator(self):
         df = self.dataframe
         shares = df['shares'].values
         times = df.index.values
-        dates = utils.datetime_to_np(dates)
-        # dates = np.asarray(dates).astype('datetime64')
-        out = interp_const_after(times, shares, dates, before=0.0)
-        return out
+        interp = InterpConstAfter(times, shares, before=0)
+        return interp
+    
+    def get_share(self, date: np.datetime64) -> float:
+        return self._share_interpolator.scalar(date)
+    
+    
+    def get_shares(self, dates: np.ndarray) -> float:
+        return self._share_interpolator(dates)
+        
+    
+    
+        
+    
+    
+    
+    # def _get_next_close(self, date):
+    #     """Get next close (adjusted) price given `date`."""
+    #     date = np.datetime64(date)
+    #     date = floor_to_date(date)
+    #     try:
+    #         out = self.df.loc[date]
+    #     except KeyError:
+    #         date1 = self.get_next_trading_date(date)
+            
+    #         warn(
+    #             f'Date {date} was not found, probably not a trading day.'
+    #             f' New date is {date1}.'
+    #             )
+    #         return self._get_next_close(date1)
+        
+    #     return out[self.price_name], date    
+    
+    
+    # def get_shares(self, dates: np.ndarray) -> np.ndarray:
+    #     """Get the number of invested shares for given dates."""
+    #     df = self.dataframe
+    #     shares = df['shares'].values
+    #     times = df.index.values
+    #     dates = utils.datetime_to_np(dates)
+    #     # dates = np.asarray(dates).astype('datetime64')
+    #     out = interp_const_after(times, shares, dates, before=0.0)
+    #     return out
+    
+    
+    def last_shares(self):
+        """Get shares for last executed action"""
+        action = self.executed_actions[-1]
+        return action.shares
     
     
     def get_share_valuation_for_action(self, ii:int):
@@ -307,57 +342,73 @@ class SymbolTransactions:
         date = action.date
         date = floor_to_date(date)
         try:
-            close = self.df[self.close_name][date]
+            close = self.df[self.price_name][date]
         except KeyError:
             close = self.get_next_close(date)
         return close * shares
         
         
     
-    def _get_shares(self, date: datetime.datetime) -> float:
-        """Get the number of invested shares for a given date."""
-        # dates = [action.date for action in self.actions]
-        actions = self.executed_actions
+    # def _get_shares(self, date: datetime.datetime) -> float:
+    #     """Get the number of invested shares for a given date."""
+    #     # dates = [action.date for action in self.actions]
+    #     actions = self.executed_actions
         
-        if date < actions[0].date:
-            return 0.0
-        if len(actions) == 1:
-            return actions[0].shares
+    #     if date < actions[0].date:
+    #         return 0.0
+    #     if len(actions) == 1:
+    #         return actions[0].shares
         
-        for ii in range(len(actions)-1):
-            action1 = actions[ii]
-            action2 = actions[ii + 1]
-            if action1.date <= date < action2.date:
-                return action1.shares
+    #     for ii in range(len(actions)-1):
+    #         action1 = actions[ii]
+    #         action2 = actions[ii + 1]
+    #         if action1.date <= date < action2.date:
+    #             return action1.shares
             
         
-        # If date has gone through whole history, return last share value.
-        return action2.shares
+    #     # If date has gone through whole history, return last share value.
+    #     return action2.shares
     
     
-    def get_share_valuation(self, date: np.ndarray) -> np.ndarray:
-        """Calculate value of shares at the given date."""
-        close = self.get_next_close(date)
+    def get_share_valuations(self, date: np.ndarray) -> np.ndarray:
+        """Calculate value of shares at the given dates."""
+        price = self.get_price(date)
         shares = self.get_shares(date)
-        value = close * shares
+        value = price * shares
         return value
     
     
-    def __get_adj_price(self, date: datetime.datetime):
-        """Estimate the price of the stock if bought in the date."""
-        date = np.datetime64(date)
-        date = floor_to_date(date)
-        
-        out = self.df.loc[date]
-        adj_close = out[self.close_name]
-        return adj_close 
+    def get_share_valuation(self, date: np.datetime64) -> float:
+        """Calculate value of shares at the given date."""
+        price = self._price_interpolator.scalar(date)
+        shares = self._share_interpolator.scalar(date)
+        value = price * shares
+        return value    
     
     
-    def get_adj_price(self, date: np.ndarray) -> np.ndarray:
-        """Estimate the price of the stock if bought in the date."""
-        close = self.df[self.close_name]
-        times = self.df.index
-        return interp_const_after(times, close, date)
+    def get_price(self, date: np.ndarray) -> np.ndarray:
+        return self._price_interpolator(date)
+    
+
+    
+    # def get_adj_price(self, date: np.ndarray) -> np.ndarray:
+    #     """Estimate the price of the stock if bought in the date."""
+    #     close = self._interp_close
+    #     times = self._interp_times
+    #     date = date.astype(float)
+    #     return self._price_interpolator(date) 
+    
+    
+    # @cached_property
+    # def _interp_close(self):
+    #     return self.df[self.price_name].values
+    
+    
+    # @cached_property
+    # def _interp_times(self):
+    #     return self.df.index.values.astype(float)
+    
+    
     
     
     def _check_dates(self, action: Action):
@@ -388,7 +439,7 @@ class SymbolTransactions:
         
         date = action.date
         # trade_date = self.get_next_trading_date(date)
-        price = self.get_adj_price(date)
+        price = self.get_price(date)
 
         # close, date = self._get_last_close(date)
         amount = action.amount
@@ -437,6 +488,8 @@ class SymbolTransactions:
     
     def execute(self):
         delete_attr(self, 'dataframe')
+        delete_attr(self, '_price_interpolator')
+        delete_attr(self, '_share_interpolator')
         while self.queue:
             self._execute_one()            
 
@@ -495,13 +548,15 @@ class Transactions:
                  stock_data: BaseData, 
                  init_funds=0, 
                  actions: list[Action]=None, 
-                 commission=0.0
+                 commission=0.0,
+                 price_name=DF_ADJ_CLOSE,
                  ):
         self.stock_data = stock_data
         self.init_funds = init_funds
         self.commission = commission
         self.executed_actions = []
         self.balances = []
+        self.price_name = price_name
         # self.stats = TransactionStats(self)
         
         if actions is None:
@@ -533,6 +588,7 @@ class Transactions:
             self._symbol_transactions_dict = {}
             return self._symbol_transactions_dict
         
+        
     def get_symbol_transactions(self, symbol:str) -> SymbolTransactions:
         return self._get_symbol_transactions_dict()[symbol]
     
@@ -559,7 +615,8 @@ class Transactions:
                 st = SymbolTransactions(
                     symbol, 
                     stock_data=self.stock_data,
-                    commission=self.commission
+                    commission=self.commission,
+                    price_name=self.price_name,
                     )
                 sdict[symbol] = st
                 
@@ -692,7 +749,7 @@ class Transactions:
         
         
         for s_transaction in sdict.values():
-            values = s_transaction.get_share_valuation(dates)
+            values = s_transaction.get_share_valuations(dates)
             equity = equity + values
 
         for ii, balance in enumerate(balances):
@@ -707,7 +764,7 @@ class Transactions:
     #         return self.init_funds
         
         
-    def get_asset_values(self, date: datetime.datetime) -> pd.Series:
+    def get_asset_values(self, date: np.datetime64) -> pd.Series:
         """Retrieve value of each assets."""
         sdict = self._get_symbol_transactions_dict()
         new = {}
@@ -719,14 +776,14 @@ class Transactions:
         return pd.Series(new)
     
     
-    def get_asset_shares(self, date: datetime.datetime) -> pd.Series:
+    def get_asset_shares(self, date: np.datetime64) -> pd.Series:
         """Retrieve # of shares for each asset."""
         sdict = self._get_symbol_transactions_dict()
         new = {}
         st : SymbolTransactions
         for symbol, st in sdict.items():
             date = np.datetime64(date)
-            value = st.get_shares(date)
+            value = st.get_share(date)
             new[symbol] = value
         return pd.Series(new)    
     
@@ -736,7 +793,7 @@ class Transactions:
         return list(self._get_symbol_transactions_dict().keys())
         
         
-    def get_available_funds(self, date: datetime.datetime):
+    def get_available_funds(self, date: np.datetime64):
         """Get available cash funds for a given date."""
         balances = self.balances
         balance1 : AccountBalance

@@ -161,8 +161,9 @@ def test_interday():
     for action in actions:
         date = action.date
         print(action)
-                
-    
+        
+            
+
     
 if __name__ == '__main__':
     test_3()

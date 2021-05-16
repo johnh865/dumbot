@@ -14,7 +14,7 @@ def test_buysell():
     
     symbol = 'VOO'
     y = YahooData([symbol])
-    df = y.get_symbol_all(symbol)    
+    df = y.dataframes[symbol]
     df = df.iloc[-1000::2]
     
     series = df[DF_ADJ_CLOSE]
@@ -50,7 +50,7 @@ def test_2():
     
     symbol = 'VOO'
     y = YahooData([symbol])
-    df = y.get_symbol_all(symbol)    
+    df = y.dataframes[symbol]
     df = df.iloc[-1000::2]
     series = df[DF_ADJ_CLOSE]
     times = utils.dates2days(series.index)
@@ -62,5 +62,5 @@ def test_2():
     
     
 if __name__ == '__main__':
-    # test_buysell()
+    test_buysell()
     test_2()
