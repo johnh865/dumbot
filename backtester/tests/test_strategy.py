@@ -32,42 +32,72 @@ def my_indicators(df, window: int):
     return i1, i2
 
 
+class MyStrategy(Strategy):
+    def init(self):
+        self.i1 = self.indicator(rolling_avg, 25)
+        self.i2 = self.indicator(my_indicators, 40)
+        
+        
+    def next(self):
+        
+        # Attempt to retrieve indicator data
+        i1_data = self.i1('DIS')
+        i2_data = self.i2('DIS')
+        i2_df = self.i2.dataframe('DIS')
+        columns = self.i2.columns
+        
+        assert np.all(columns == i2_df.columns)
+        assert np.all(i2_df.values == i2_data)
+        
+        # Make sure last date of indicator data is the current date. 
+        assert i2_df.index[-1] == self.date
+        
+        
+        if self.days_since_start % 30 == 0:
+            try:
+                print(f'Available cash {self.available_funds:.2f}')
+                b = self.buy('DIS', 250.0)
+                print(b)
+            except NoMoneyError:
+                pass
+            
+        elif self.days_since_start % 100 == 0:
+            s = self.sell_percent('DIS', 0.9)
+            print(s)
+
+
+class MyStrat(Strategy):
+    def init(self):
+        self.sma1 = self.indicator(rolling_avg, 50)
+        self.sma2 = self.indicator(rolling_avg, 200)
+
+    def next(self):
+        # If sma1 crosses above sma2, close any existing
+        # short trades, and buy the asset
+        symbol = 'DIS'
+        symbol2 = 'VOO'
+        sma1 = self.sma1(symbol)
+        sma2 = self.sma2(symbol)
+            
+        if crossover(sma1, sma2):
+            t = self.sell_percent(symbol2, 1.0)
+            print(t)
+            t = self.buy(symbol, self.available_funds)
+            print(t)
+
+        # Else, if sma1 crosses below sma2, close any existing
+        # long trades, and sell the asset
+        elif crossover(sma2, sma1):
+            t = self.sell_percent(symbol, 1.0)
+            print(t)
+            t = self.buy(symbol2, self.available_funds)
+            print(t)
+            
+        # print('assets', self.asset_values)
+            
+                
 def test1():
     """Test strategy creation and indicator creation."""
-    class MyStrategy(Strategy):
-        def init(self):
-            self.i1 = self.indicator(rolling_avg, 25)
-            self.i2 = self.indicator(my_indicators, 40)
-            
-            
-        def next(self):
-            
-            # Attempt to retrieve indicator data
-            i1_data = self.i1('DIS')
-            i2_data = self.i2('DIS')
-            i2_df = self.i2.dataframe('DIS')
-            columns = self.i2.columns
-            
-            assert np.all(columns == i2_df.columns)
-            assert np.all(i2_df.values == i2_data)
-            
-            # Make sure last date of indicator data is the current date. 
-            assert i2_df.index[-1] == self.date
-            
-            
-            if self.days_since_start % 30 == 0:
-                try:
-                    print(f'Available cash {self.available_funds:.2f}')
-                    b = self.buy('DIS', 250.0)
-                    print(b)
-                except NoMoneyError:
-                    pass
-                
-            elif self.days_since_start % 100 == 0:
-                s = self.sell_percent('DIS', 0.9)
-                print(s)
-            pass
-    
     
     b = Backtest(stock_data=yahoo, 
                  strategy=MyStrategy,
@@ -82,34 +112,7 @@ def test1():
     
 def test2():
     """Test creating indicators for SMA."""
-    class MyStrat(Strategy):
-        def init(self):
-            self.sma1 = self.indicator(rolling_avg, 50)
-            self.sma2 = self.indicator(rolling_avg, 200)
 
-        def next(self):
-            # If sma1 crosses above sma2, close any existing
-            # short trades, and buy the asset
-            symbol = 'DIS'
-            symbol2 = 'VOO'
-            sma1 = self.sma1(symbol)
-            sma2 = self.sma2(symbol)
-                
-            if crossover(sma1, sma2):
-                t = self.sell_percent(symbol2, 1.0)
-                print(t)
-                t = self.buy(symbol, self.available_funds)
-                print(t)
-
-            # Else, if sma1 crosses below sma2, close any existing
-            # long trades, and sell the asset
-            elif crossover(sma2, sma1):
-                t = self.sell_percent(symbol, 1.0)
-                print(t)
-                t = self.buy(symbol2, self.available_funds)
-                print(t)
-                
-                
     bt = Backtest(stock_data=yahoo, 
                  strategy=MyStrat,
                  cash=1,
@@ -146,8 +149,8 @@ def test_buy_hold():
                 portion = self.available_funds / num
                 for symbol in symbols:
                     self.buy(symbol, portion)
-                    
-                    
+            
+            # pdb.set_trace()
 
             return
     
@@ -176,9 +179,9 @@ def test_buy_hold():
 
 
 if __name__ == '__main__':
-    test1()
+    # test1()
     test2()
-    df = test_buy_hold()
+    # df = test_buy_hold()
     
     
     

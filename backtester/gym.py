@@ -23,9 +23,21 @@ class EnvStrategy(Strategy):
         self.action = 0
         self.is_holding = False
         self.symbol = ''
+        self.start_equity = 0.
 
     
+    def return_ratio(self):
+        if self.is_holding:
+            return (self.equity - self.start_equity) / self.start_equity
+        else:
+            return 0
+
+
+
     def next(self):
+        
+        
+        
         if self.is_holding:
             if self.action == 0:
                 self.sell_percent(self.symbol, 1.0)
@@ -33,8 +45,10 @@ class EnvStrategy(Strategy):
                 # print('selling')
         else:
             if self.action == 1:
-                self.buy(self.symbol, self.available_funds)
+                action = self.buy(self.symbol, self.available_funds)
                 self.is_holding = True
+                
+                self.start_equity = self._transactions.balances[-1].equity
                 # print('buying')
     
     
@@ -87,7 +101,9 @@ class EnvBase:
         
         df = indicators.dataframes[name1]
         col_num = df.values.shape[1]
-        self.observation_space = ObservationSpace(shape=(col_num,))
+        
+        # Add one for return ratio observation
+        self.observation_space = ObservationSpace(shape=(col_num + 1,))
         self.action_space = ActionSpace(n=2)        
         self._rng : Generator
         
@@ -97,12 +113,23 @@ class EnvBase:
         self.seed(seed)
         
         
-    def step(self, action):
+    def step(self, action: int):
+        
+        
+        
         strategy = self.backtest.strategy
         strategy.action = action
         self.backtest.step()
+        
+        self._assets.append(self._calc_assets())
+        
+        reward = self._reward()
+        done = self._done()
+        info = self._info()
+        
         self.time_index += 1
-        return self._observe(), self._reward(), self._done(), self._info()
+        obs = self._observe()
+        return obs, reward, done, info
         
     
     def reset(self):
@@ -129,30 +156,36 @@ class EnvBase:
                                  price_name=self.price_name
                                  )
         self.backtest.strategy.symbol = self.symbol
-        self.backtest.step()
-        self._assets = 100.0
+        # self.backtest.step()
+        self._assets = [100.0]
         return self._observe()
     
-        
-    def _observe(self):
-        """Observe latest indicators."""
-        table: TableData = self.indicators.tables[self.symbol]
-        return table.values[self.time_index]
-      
     
-    def _reward(self):
-        """Calculate the reward of the latest step."""
+    def _calc_assets(self):
         funds = self.backtest.strategy.available_funds
         try:
             assets = self.backtest.strategy.asset_values.values[0]
         except IndexError:
             assets = 0
-            
-        new_assets = funds + assets
+        return funds + assets
         
-        reward = new_assets - self._assets
-        self._assets = new_assets
-        return reward
+        
+    def _observe(self):
+        """Observe latest indicators. Append return ratio to indicators."""
+        table: TableData = self.indicators.tables[self.symbol]
+        v = table.values[self.time_index]
+        return_ratio  = self._return_ratio()        
+        return np.append(v, return_ratio)
+      
+    
+    def _reward(self):
+        """Calculate the reward of the latest step."""
+        return self._assets[-1] - self._assets[-2]
+    
+    
+    def _return_ratio(self):
+        return self.backtest.strategy.return_ratio()
+    
     
     def _done(self):
         if self.time_index >= self.stop_index:
@@ -216,16 +249,16 @@ def env_sin20_growth():
     return env
 
 
-def env_noise():
+def env_noise(seed=0):
     def indicator1(df):
         close = df['Close']
-        windows = [5, 10, 20, 50, 100]
+        windows = [100]
         outs = {}
         for window in windows:
             ts = TrailingStats(close, window)
-            out = ts.exp_growth
-            out[np.isnan(out)] = 0
-            outs[f'growth({window})'] = out
+            # out = ts.exp_growth
+            # out[np.isnan(out)] = 0
+            # outs[f'growth({window})'] = out
             
             out = ts.exp_reg_diff
             out[np.isnan(out)] = 0
@@ -237,7 +270,8 @@ def env_noise():
     
     env = EnvBase(stock_data=fdata,
                   indicators=indicators, 
-                  price_name='Close')
+                  price_name='Close',
+                  seed=seed)
     env.reset()
     return env
 

@@ -2,6 +2,7 @@ import pdb
 import datetime
 import dataclasses
 from collections import deque 
+from abc import abstractmethod, ABCMeta
 
 
 from warnings import warn
@@ -155,6 +156,56 @@ class TransactionsDF(pd.DataFrame):
     fee : float = None
     gain : float  = None
     price : float  = None
+    
+    
+class ActionExecutor(metaclass=ABCMeta):
+    def __init__(self, transactions: 'SymbolTransactions'):
+        self.transactions = transactions
+        self._executed_num = 0
+    
+    
+    def execute(self):
+        actions = self.transactions.executed_actions
+        while self._executed_num < len(actions):
+            action = actions[self._executed_num]
+            self._execute_one(action)
+            self._executed_num += 1
+            
+            
+    @abstractmethod
+    def execute_one(self, action: Action):
+        return
+    
+            
+            
+        
+        
+# class SymbolCostBasis(ActionExecutor):
+#     """Calculate stock cost basis, the money you've spent on purchases."""
+#     def __init__(self, transactions: SymbolTransactions):
+#         super().__init__(transactions)
+#         self.costs = []
+#         self.equity = []
+#         self.
+
+
+        
+#     def execute_one(self, action: Action):
+#         last_cost = self.costs[-1]
+#         if action.name == ACTION_BUY:
+#             new_cost = last_cost + action.amount
+            
+        
+        
+        
+        
+        
+#     def get(self, date: np.datetime64):
+        
+        
+    
+    
+    
     
 
 class SymbolTransactions:
@@ -333,6 +384,7 @@ class SymbolTransactions:
         """Get shares for last executed action"""
         action = self.executed_actions[-1]
         return action.shares
+    
     
     
     def get_share_valuation_for_action(self, ii:int):

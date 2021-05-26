@@ -15,8 +15,8 @@ from backtester import gym
 
 env = gym.env_noise()
 settings = Settings(
-    epsilon_decay=.0007,
-    epsilon_final=0,
+    epsilon_decay=.0006,
+    epsilon_final=0.5,
     lr=.002
     )
 
@@ -29,16 +29,6 @@ def train(numiters=1000):
     state_dict = trainer.target_net.state_dict()
     return state_dict, df
 
-
-# var_state = cache.var('model state dict')
-# trainer = Trainer(env, settings)
-# if not var_state:
-#     trainer.train(1500)
-#     state_dict = trainer.target_net.state_dict()
-#     var_state.set(state_dict)
-    
-# state_dict = var_state.get()
-# trainer.load_state_dict(state_dict)
 
 trainer = Trainer(env, settings)
 state_dict, df0 = train(1500)

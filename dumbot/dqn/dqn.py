@@ -174,7 +174,7 @@ class Trainer:
             epsilon -= epsilon_decay
             epsilon = max(epsilon, epsilon_final)
                         
-            running_score = 0.99 * running_score + .01 * score
+            running_score = 0.95 * running_score + .05 * score
             if e % log_interval == 0:
                 s = (
                     f'{e} episode | score: {running_score:.2f}'

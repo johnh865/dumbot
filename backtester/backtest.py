@@ -67,6 +67,7 @@ class Strategy(metaclass=ABCMeta):
         delete_attr(self, 'stock_data')
         delete_attr(self, 'existing_symbols')
         delete_attr(self, 'unlisted_symbols')
+        delete_attr(self, 'equity')
 
         
     def _delete_transaction_cache(self):
@@ -149,6 +150,17 @@ class Strategy(metaclass=ABCMeta):
     def asset_values(self) -> pd.Series:
         """Pandas Series of asset value of each traded symbol for current increment."""
         return self._transactions.get_asset_values(self._date)
+    
+    
+    @cached_property
+    def equity(self) -> float:
+        funds = self.available_funds
+        try:
+            assets = self.asset_values.values.sum()
+        except IndexError:
+            assets = 0
+        return funds + assets
+
     
     
     @cached_property
@@ -368,6 +380,7 @@ class _IndicatorValue:
         except IndexError:
             return default
     
+        
 
 class Backtest:
     """Main testing component to test and run strategies.
