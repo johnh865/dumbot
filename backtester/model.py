@@ -26,7 +26,7 @@ from datasets.symbols import ALL
 from backtester.stockdata import BaseData
 from backtester.utils import dates2days, floor_to_date
 from backtester.utils import InterpConstAfter, delete_attr
-from backtester.exceptions import NoMoneyError, TradingError
+from backtester.exceptions import NoMoneyError, TradingError, BacktestError
 from backtester import utils
 from backtester.exceptions import DataError
 
@@ -344,13 +344,38 @@ class SymbolTransactions:
     
     def get_shares(self, dates: np.ndarray) -> float:
         return self._share_interpolator(dates)
+    
+    
+    
+    def last_return_ratio(self, date: np.datetime64) -> float:
+        """Calculate ratio of return price since buy from zero shares."""
+        df = self.dataframe
+        shares = df['shares'].values
+        prices = df['price'].values
         
-    
-    
+        if len(prices) == 0:
+            return 0.0
+        if shares[-1] == 0:
+            return 0.0
         
-    
-    
-    
+        try:
+            start_loc = np.where(shares == 0)[0][-1] + 1
+            
+            if df.index[start_loc] > date:
+                raise BacktestError('Date must be greater than date of last action.')
+        except IndexError:
+            start_loc = 0
+        
+        start_price = prices[start_loc]
+            
+        end_price = self.get_price(date) * (1 - self.commission)
+        ratio = (end_price - start_price) / start_price
+        return ratio
+   
+        
+
+        
+        
     # def _get_next_close(self, date):
     #     """Get next close (adjusted) price given `date`."""
     #     date = np.datetime64(date)
@@ -439,7 +464,7 @@ class SymbolTransactions:
     
     
     def get_price(self, date: np.ndarray) -> np.ndarray:
-        return self._price_interpolator(date)
+        return self._price_interpolator.scalar(date)
     
 
     
@@ -843,6 +868,19 @@ class Transactions:
     def get_traded_symbols(self):
         """Retrun list[str] of traded symbols."""
         return list(self._get_symbol_transactions_dict().keys())
+    
+    
+    
+    def get_return_ratios(self, date: np.datetime64):
+        sdict = self._get_symbol_transactions_dict()
+        new = {}
+        st : SymbolTransactions
+        for symbol, st in sdict.items():
+            date = np.datetime64(date)
+            value = st.last_return_ratio(date)
+            new[symbol] = value
+        return pd.Series(new)    
+        
         
         
     def get_available_funds(self, date: np.datetime64):

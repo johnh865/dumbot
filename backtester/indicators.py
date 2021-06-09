@@ -2,7 +2,7 @@
 import math
 from functools import cached_property, wraps
 from numba import njit
-from math import sqrt
+from math import sqrt, ceil
 
 import pandas as pd
 import numpy as np
@@ -86,7 +86,7 @@ def _array_windows_skip(x: np.ndarray,
                         window: np.int64,
                         skip: np.int64=1) -> np.ndarray:
     xlen = len(x)
-    tnum = (xlen - window) / skip
+    tnum = ceil((xlen - window) / skip)
     if tnum < 1:
         raise NotEnoughDataError('Window size is greater than length x')
         
@@ -187,32 +187,42 @@ def cumulative_std(x: np.ndarray, mean: np.ndarray=None):
 
 
 class TrailingBase:
-    def __init__(self, series : pd.Series, window_size : int):
+    def __init__(self, series : pd.Series, 
+                 window_size : int, skip: int=1):
         self.window_size = np.int64(window_size)
+        self.skip = np.int64(skip)
         self.series = series   
         
         
     @cached_property
     def times(self) -> np.ndarray:
         """Associated times for output properties."""
-        return self.series.index.values[0 : -self.window_size]
-        
-
+        return self.series.index.values[0 : -self.window_size : self.skip]
+    
+    
     @cached_property
-    def time_days_int(self):
-        """Return time in days as array[int] from start day."""
+    def _time_days_int_noskip(self):
         tdelta = self.series.index - self.series.index[0]
         try:
             tdelta = tdelta.astype('timedelta64[D]')
         except TypeError:
             pass
-        return np.array(tdelta)
+        return np.asarray(tdelta)
+        
+
+
+    @cached_property
+    def time_days_int(self):
+        """Return time in days as array[int] from start day."""
+        return self._time_days_int_noskip[:: self.skip]
+        
     
     
     def _append_nan(self, arr):
         """Append nan to beginning of array for window."""
         nans = np.empty(self.window_size)
         nans[:] = np.nan
+        nans = nans[:: self.skip]
         return np.append(nans, arr)        
     
     
@@ -230,8 +240,12 @@ class TrailingBase:
     @cached_property
     def _time_days_int_intervals(self):
         """Construct time intervals for windowing."""
-        times = self.time_days_int
-        return array_windows(times, self.window_size)
+        times = self._time_days_int_noskip
+        
+        if self.skip > 1:
+            return array_windows_skip(times, self.window_size, self.skip)
+        else:
+            return array_windows(times, self.window_size)
 
         
     @cached_property
@@ -240,7 +254,11 @@ class TrailingBase:
         # tnum = len(self.series.index) - self.window_size
         # series = self.series
         values = self.series.values
-        return array_windows(values, self.window_size)
+        
+        if self.skip > 1:
+            return array_windows_skip(values, self.window_size, self.skip)
+        else:
+            return array_windows(values, self.window_size)
     
 
 class TrailingStats(TrailingBase):

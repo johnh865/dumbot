@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
-
+import pdb
 import numpy as np
+import pytest 
 
 from backtester.model import Action, SymbolTransactions
 from backtester.definitions import ACTION_BUY, ACTION_SELL, ACTION_SELL_PERCENT
 import datetime
 from backtester.stockdata import YahooData
+from backtester.exceptions import BacktestError
 # a1 = Action()
 
 
@@ -163,11 +165,66 @@ def test_interday():
         print(action)
         
             
+def test_return_ratio():    
+    date1 = np.datetime64('2017-01-05')
+    date2 = np.datetime64('2017-01-20')
+    date3 = np.datetime64('2017-05-24')
+    date4 = np.datetime64('2017-08-25')
+    date5 = np.datetime64('2017-09-25')
+    
+    
+    symbol = 'GOOG'
+
+    a1 = Action(date=date1, symbol=symbol, name=ACTION_BUY, amount=1000)
+    a2 = Action(date=date2, symbol=symbol, name=ACTION_SELL, amount=400)
+    a3 = Action(date=date3, symbol=symbol, name=ACTION_SELL_PERCENT, amount=1)  
+    a4 = Action(date=date4, symbol=symbol, name=ACTION_BUY, amount=100)  
+    
+    actions = [a1, a2, a3, a4,]
+    
+    sh = SymbolTransactions(symbol=symbol, stock_data=yahoo_data)
+    sh.add(a1)
+
+    ratio = sh.last_return_ratio(date2)
+    ratio_r = (sh.get_price(date2) - sh.get_price(date1)) / sh.get_price(date1)
+    assert np.isclose(ratio, ratio_r)
+    
+    sh.add(a2)
+    sh.add(a3)
+    ratio = sh.last_return_ratio(date3)
+    assert ratio == 0
+    
+    ratio = sh.last_return_ratio(date4)
+    assert ratio == 0
+    
+    sh.add(a4)
+    ratio = sh.last_return_ratio(date4)
+    assert ratio == 0
+    
+    ratio = sh.last_return_ratio(date5)
+    ratio_r = (sh.get_price(date5) - sh.get_price(date4)) / sh.get_price(date4)
+    assert np.isclose(ratio, ratio_r)
+    
+    # Test to make sure error is raised when previous date is used. 
+    with pytest.raises(BacktestError):
+        sh.last_return_ratio(date3)
+        
+        
+    
+    
+    return
+
+    
+    
+    
+    
+    
 
     
 if __name__ == '__main__':
-    test_3()
-    test_last_trading_date()
-    test_last_trading_date2()
-    test_exec_one()
-    test_interday()
+    # test_3()
+    # test_last_trading_date()
+    # test_last_trading_date2()
+    # test_exec_one()
+    # test_interday()
+    test_return_ratio()

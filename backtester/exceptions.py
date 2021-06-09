@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 
 
+
+class BacktestError(Exception):
+    """Generic module error."""
+    pass
+
+
 class TradingError(Exception):
     """Generic trading error."""
     pass

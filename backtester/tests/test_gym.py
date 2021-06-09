@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import pdb 
 import numpy as np
 from backtester import gym
 from backtester.utils import floor_to_date
@@ -47,12 +48,14 @@ def test2():
     
     # Start at index=5000, 2009-10-30
     obs = env.reset()
+    ind = obs[0:-1]
     out = indicator.iloc[env.time_index]
     date1 = df_stock.index[env.time_index]
     date_env = indicator.index[env.time_index]
+    close = df_stock.iloc[env.time_index]
     
     
-    assert np.all(out == obs)
+    assert np.all(out == ind)
     assert date1 == date_env
     
     # Increment, perform action on 2009-10-30 ... NO BUY
@@ -60,9 +63,11 @@ def test2():
     date = np.datetime64('2009-10-30')
     date_next = np.datetime64('2009-11-02')
     obs1, reward1, done1, info1 = env.step(1)
+    ind1 = obs1[0 : -1]
+    close1 = df_stock.loc[date_next]
     
     assert np.isclose(reward1, -.2)
-    assert np.all(indicator.loc[date_next] == obs1)
+    assert np.all(indicator.loc[date_next] == ind1)
     assert floor_to_date(env.backtest.strategy.date) == date
     
     
@@ -71,7 +76,9 @@ def test2():
     date = np.datetime64('2009-11-02')
     date_next = np.datetime64('2009-11-03')
     obs2, reward2, done2, info2 = env.step(1)
-    assert np.all(indicator.loc[date_next] == obs2)
+    ind2 = obs2[0 : -1]
+    
+    assert np.all(indicator.loc[date_next] == ind2)
     assert floor_to_date(env.backtest.strategy.date) == date
     
     obs3, reward3, done3, info3 = env.step(1)
@@ -81,6 +88,18 @@ def test2():
 
     df = env.backtest.transactions.dataframe
     assert 100 + reward1 + reward2 + reward3 + reward4 == df['equity'].iloc[-1]
+
+    
+    pdb.set_trace()
+    return
+
+
+
+# def test_return_ratio():
+#     env = gem.env_noise(0)
+    
+    
+
 
 if __name__ == '__main__':
     test2()

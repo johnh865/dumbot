@@ -233,15 +233,26 @@ def test_max_loss():
     max_loss = ts.max_loss
     return
 
+
+def test_skip():
+    y = YahooData()
+    df = y.dataframes['VOO']
+    series = df[DF_ADJ_CLOSE]
     
+    for skip in range(2, 10):
+        
+        ts = TrailingStats(series, window_size=10, skip=skip)
+        slope = ts.slope_normalized
+
     
 
 if __name__ == '__main__':
-    test1()
-    test_trailing_avg()
-    test_close_intervals()
-    test_intervals()
+    # test1()
+    # test_trailing_avg()
+    # test_close_intervals()
+    # test_intervals()
     
-    test_std()
-    test_max_loss()
+    # test_std()
+    # test_max_loss()
+    test_skip()
 

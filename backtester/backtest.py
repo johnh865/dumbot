@@ -16,7 +16,9 @@ from backtester.model import Action
 from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
 from backtester.stockdata import BaseData, Indicators
-from backtester.exceptions import NoMoneyError, TradingError, NotEnoughDataError
+from backtester.exceptions import (
+    NoMoneyError, TradingError, NotEnoughDataError, BacktestError)
+
 from backtester.definitions import SMALL_DOLLARS, DF_ADJ_CLOSE
 from backtester.indicators import TrailingStats
 
@@ -335,7 +337,11 @@ class IndicatorValue:
     def __call__(self, symbol: str):
         return self.array(symbol)
     
-        
+    
+
+class StrategyState:
+    
+    
     
 class _IndicatorValue:
     """Store reference to indicator, retrieve the indicator data for 

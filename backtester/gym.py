@@ -139,7 +139,7 @@ class EnvBase:
         self.symbol = rng.choice(self._stock_names)
         
         times =  stock_data.dataframes[self.symbol].index.values
-        tnum = len(times) - self.game_length
+        tnum = len(times) - self.game_length - 1
         i1 = rng.integers(0, tnum)
         i2 = i1 + self.game_length
         self.time_index = i1
@@ -252,13 +252,13 @@ def env_sin20_growth():
 def env_noise(seed=0):
     def indicator1(df):
         close = df['Close']
-        windows = [100]
+        windows = [20, 50, 100]
         outs = {}
         for window in windows:
             ts = TrailingStats(close, window)
-            # out = ts.exp_growth
-            # out[np.isnan(out)] = 0
-            # outs[f'growth({window})'] = out
+            out = ts.exp_growth
+            out[np.isnan(out)] = 0
+            outs[f'growth({window})'] = out
             
             out = ts.exp_reg_diff
             out[np.isnan(out)] = 0
@@ -275,6 +275,38 @@ def env_noise(seed=0):
     env.reset()
     return env
 
+
+
+def env_spy(seed=0):
+    
+   def indicator1(df):
+        close = df[DF_ADJ_CLOSE]
+        windows = [100, 400]
+        outs = {}
+        for window in windows:
+            ts = TrailingStats(close, window)
+            out = ts.exp_growth
+            out[np.isnan(out)] = 0
+            outs[f'growth({window})'] = out
+            
+            out = ts.exp_reg_diff
+            out[np.isnan(out)] = 0
+            outs[f'diff({window})'] = out
+        return outs
+
+    
+    
+   stock_data = YahooData(symbols=['SPY'])
+   indicators = Indicators(stock_data)
+   indicators.create(indicator1)
+   
+   env = EnvBase(stock_data=stock_data,
+                 indicators=indicators,
+                 price_name=DF_ADJ_CLOSE,
+                 seed=seed,
+                 )
+   env.reset()
+   return env
 
 
 
