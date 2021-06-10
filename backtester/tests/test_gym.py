@@ -17,7 +17,7 @@ def test1():
     actions = [0, 1, 0, 1, 1, 0, 1]
     for action in actions:
         output = env.step(action)
-        print(env.backtest.strategy.asset_values)
+        print(env.backtest.strategy.state.asset_net)
         out.append(output)
         reward = output[1]
         rewards.append(reward)
@@ -47,7 +47,7 @@ def test2():
     
     
     # Start at index=5000, 2009-10-30
-    obs = env.reset()
+    obs = env.reset(time_index=5000)
     ind = obs[0:-1]
     out = indicator.iloc[env.time_index]
     date1 = df_stock.index[env.time_index]
@@ -90,7 +90,6 @@ def test2():
     assert 100 + reward1 + reward2 + reward3 + reward4 == df['equity'].iloc[-1]
 
     
-    pdb.set_trace()
     return
 
 
@@ -102,4 +101,5 @@ def test2():
 
 
 if __name__ == '__main__':
+    test1()
     test2()

@@ -37,7 +37,7 @@ def array_windows(x: np.ndarray,
     
     # This is to catch a weird CPUDispatcher NULL when using numba in cProfile
     try:
-            return _array_windows(x, window)        
+        return _array_windows(x, window)        
     except SystemError:
         raise NotEnoughDataError('Window size is greater than length x')
         
@@ -71,7 +71,7 @@ def _array_windows(x: np.ndarray, window: np.int64) -> np.ndarray:
         Raise if window is larger than len(x).
     """
     xlen = len(x)
-    tnum = xlen - window
+    tnum = xlen - window + 1
     if tnum < 1:
         raise NotEnoughDataError('Window size is greater than length x')
     
@@ -86,15 +86,39 @@ def _array_windows_skip(x: np.ndarray,
                         window: np.int64,
                         skip: np.int64=1) -> np.ndarray:
     xlen = len(x)
-    tnum = ceil((xlen - window) / skip)
+    tnum = ceil((xlen - window + 1) / skip)
+    tnum = int(tnum)
+    
     if tnum < 1:
         raise NotEnoughDataError('Window size is greater than length x')
+   
         
     intervals = np.zeros((tnum, window))
     for ii in range(tnum):
         kk = ii * skip
         intervals[ii] = x[kk : kk + window]
     return intervals    
+
+
+
+
+
+# @njit
+def array_windows_index(x: np.ndarray,
+                        window: np.int64, 
+                        index_start: np.ndarray, 
+                        index_end: np.ndarray):
+    ilen1 = len(index_start)
+    ilen2 = len(index_end)
+    # print(len(x), window)
+    intervals = np.zeros((ilen1, window))
+    intervals[:] = np.nan
+    for ii, (k_start, k_end) in enumerate(zip(index_start, index_end)):    
+        intervals[ii, 0 : window] = x[k_start : k_end]
+    
+    return intervals
+
+
 
 
 def append_nan(arr, window: int):
@@ -192,12 +216,108 @@ class TrailingBase:
         self.window_size = np.int64(window_size)
         self.skip = np.int64(skip)
         self.series = series   
+        # self._start_loc = self.window_size - 1
+    
+        
+    @cached_property
+    def _index_end(self) -> np.ndarray:
+        start = self.window_size
+        end = len(self.series) + 1
+        return np.arange(start, end, self.skip)
+    
+    
+    @cached_property
+    def _index_start(self) -> np.ndarray:
+        return self._index_end - self.window_size
+    
+    
+    @cached_property
+    def _index_display(self) -> np.ndarray:
+        """Index which marks time points to be output as representative of inteval."""
+        return self._index_end - 1
+        
+    
+        
+    @cached_property
+    def times(self) -> np.ndarray:
+        """Associated times for output properties."""
+        # return self.series.index.values[self._start_loc :: self.skip]
+        return self.series.index.values[self._index_display]
+    
+    
+    @cached_property
+    def values(self) -> np.ndarray:
+        """Associated values with times."""
+        # return self.series.values[self._start_loc :: self.skip]    
+        return self.series.values[self._index_display]    
+    
+    
+    @cached_property
+    def time_days_int(self):
+        """Return time in days as array[int] from start day."""
+        # return self._time_days_int_noskip[self._start_loc :: self.skip]    
+        return self._time_days_int_noskip[self._index_display]    
+    
+    
+    @cached_property
+    def _time_days_int_noskip(self):
+        tdelta = self.series.index - self.series.index[0]
+        try:
+            tdelta = tdelta.astype('timedelta64[D]')
+        except TypeError:
+            pass
+        return np.asarray(tdelta)
+        
+    
+    @cached_property
+    def _time_days_int_intervals(self):
+        """Construct time intervals for windowing."""
+        times = self._time_days_int_noskip
+        return array_windows_index(times, 
+                                   self.window_size, 
+                                   self._index_start,
+                                   self._index_end,)
+        
+        # if self.skip > 1:
+        #     return array_windows_skip(times, self.window_size, self.skip)
+        # else:
+        #     return array_windows(times, self.window_size)
+
+        
+    @cached_property
+    def _adj_close_intervals(self) -> np.ndarray:
+        """list[pandas.Series] : Close Intervals on where to calculate statistics."""
+        # tnum = len(self.series.index) - self.window_size
+        # series = self.series
+        values = self.series.values
+        return array_windows_index(values, 
+                                   self.window_size, 
+                                   self._index_start,
+                                   self._index_end,)
+
+        # if self.skip > 1:
+        #     return array_windows_skip(values, self.window_size, self.skip)
+        # else:
+        #     return array_windows(values, self.window_size)
+    
+
+
+
+        
+class TrailingBaseOLD:
+    def __init__(self, series : pd.Series, 
+                 window_size : int, skip: int=1):
+        self.window_size = np.int64(window_size)
+        self.skip = np.int64(skip)
+        self.series = series   
         
         
     @cached_property
     def times(self) -> np.ndarray:
         """Associated times for output properties."""
-        return self.series.index.values[0 : -self.window_size : self.skip]
+        return self.series.index.values[:: self.skip]
+    
+    
     
     
     @cached_property
@@ -220,7 +340,7 @@ class TrailingBase:
     
     def _append_nan(self, arr):
         """Append nan to beginning of array for window."""
-        nans = np.empty(self.window_size)
+        nans = np.empty(self.window_size - 1)
         nans[:] = np.nan
         nans = nans[:: self.skip]
         return np.append(nans, arr)        
@@ -231,9 +351,9 @@ class TrailingBase:
         """Decorator to append np.nan to beginning of the array."""
         
         @wraps(func)
-        def func2(self):
-            output = func(self)
-            return self._append_nan(output)
+        def func2(obj):
+            output = func(obj)
+            return obj._append_nan(output)
         return func2
     
     
@@ -249,7 +369,7 @@ class TrailingBase:
 
         
     @cached_property
-    def _adj_close_intervals(self) -> list[pd.Series]:
+    def _adj_close_intervals(self) -> np.ndarray:
         """list[pandas.Series] : Close Intervals on where to calculate statistics."""
         # tnum = len(self.series.index) - self.window_size
         # series = self.series
@@ -289,9 +409,9 @@ class TrailingStats(TrailingBase):
         b = ymean - m * xmean
         r = ss_xy / np.sqrt(ss_xx * ss_yy)
 
-        m = self._append_nan(m)
-        b = self._append_nan(b)
-        r = self._append_nan(r)
+        # m = self._append_nan(m)
+        # b = self._append_nan(b)
+        # r = self._append_nan(r)
         return m, b, r
     
     
@@ -314,8 +434,10 @@ class TrailingStats(TrailingBase):
             slopes.append(result.slope)            
             intercepts.append(math.exp(result.intercept))
             
-        slopes =  self._append_nan(np.asarray(slopes))
-        intercepts = self._append_nan(np.asarray(intercepts))
+        # slopes =  self._append_nan(np.asarray(slopes))
+        # intercepts = self._append_nan(np.asarray(intercepts))
+        slopes = np.array(slopes)
+        intercepts = np.array(intercepts)
         return slopes, intercepts
     
     
@@ -368,13 +490,13 @@ class TrailingStats(TrailingBase):
         ss_xy = np.sum(x1 * y1, axis=1)
         
         m = ss_xy / ss_xx
-        m = self._append_nan(m)
+        # m = self._append_nan(m)
         yavg = self.rolling_avg
         return m / yavg
     
     
     @cached_property
-    @TrailingBase._append_nan_dec
+    # @TrailingBase._append_nan_dec
     def rolling_avg(self):
         arr = np.asarray(self._adj_close_intervals)
         smoothed = np.mean(arr, axis=1)
@@ -419,24 +541,24 @@ class TrailingStats(TrailingBase):
     def exp_reg_diff(self):
         """Difference between true value and exponential regression"""
         y_reg = self.exp_reg_value
-        y_true = self.series.values
+        y_true = self.values
         return (y_true - y_reg) / y_reg
         
     
     @cached_property
-    @TrailingBase._append_nan_dec
+    # @TrailingBase._append_nan_dec
     def exp_std_dev(self):
         """Standard deviation of window considering exponential fit.
         Try to measure volatility."""
         
-        y_reg = self.exp_reg_value[self.window_size :, None]
+        y_reg = self.exp_reg_value[:, None]
         y_intervals = self._adj_close_intervals
         delta = (y_intervals - y_reg) / y_reg
         return np.std(delta, axis=1)
     
     
     @cached_property
-    @TrailingBase._append_nan_dec
+    # @TrailingBase._append_nan_dec
     def max_loss(self):
         """Max loss of current day considering previous days."""
         closes = self._adj_close_intervals
@@ -447,7 +569,7 @@ class TrailingStats(TrailingBase):
     
     
     @cached_property
-    @TrailingBase._append_nan_dec
+    # @TrailingBase._append_nan_dec
     def max_gain(self):
         """Max loss of current day considering previous days."""
         closes = self._adj_close_intervals
@@ -457,7 +579,7 @@ class TrailingStats(TrailingBase):
     
     
     @cached_property
-    @TrailingBase._append_nan_dec
+    # @TrailingBase._append_nan_dec
     def return_ratio(self):
         """Get ratio of start to end value."""
         closes = self._adj_close_intervals
@@ -483,4 +605,13 @@ class FutureStats(TrailingStats):
         nans[:] = np.nan
         return np.append(arr, nans)        
     
-       
+
+
+
+x = np.arange(100)
+y = x ** 2
+s = pd.Series(y, index=x)
+t = TrailingStats(s, 11, 3)
+t = TrailingStats(s, 10)
+t.rolling_avg
+

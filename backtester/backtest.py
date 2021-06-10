@@ -13,6 +13,8 @@ import pandas as pd
 
 from backtester.model import Transactions, SymbolTransactions, TransactionsDF
 from backtester.model import Action
+from backtester.model import TransactionsLastState, MarketState
+
 from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
 from backtester.stockdata import BaseData, Indicators
@@ -34,6 +36,9 @@ class Strategy(metaclass=ABCMeta):
     - `next` increments the simulation by one trading day. 
     """
     
+    state : TransactionsLastState
+    market_state : MarketState
+    
     def __init__(self, transactions: Transactions):
         self._transactions = transactions
         self._indicators = [] 
@@ -54,6 +59,11 @@ class Strategy(metaclass=ABCMeta):
     def next(self):
         """Define your strategy per increment here."""
         raise NotImplementedError('This method needs to be implemented by user')    
+        
+        
+    @property
+    def date(self):
+        return self._date
     
         
     def _set_data(self, 
@@ -63,19 +73,14 @@ class Strategy(metaclass=ABCMeta):
 
         self._date = date   
         self._days_since_start = days_since_start
-        
-        # Clean cached property.
-        delete_attr(self, 'asset_values')
-        delete_attr(self, 'stock_data')
-        delete_attr(self, 'existing_symbols')
-        delete_attr(self, 'unlisted_symbols')
-        delete_attr(self, 'equity')
+        self.state = TransactionsLastState(self._transactions, date)
+        self.market_state = MarketState(self._transactions, date)
 
         
-    def _delete_transaction_cache(self):
-        delete_attr(self, 'available_funds')
-        delete_attr(self, 'asset_values')
-
+    def _update_state(self):
+        self.state = TransactionsLastState(self._transactions, self.date)
+        return
+    
     
     def _increment_small_time(self):
         """For multiple transactions, increment a tiny amount of time."""
@@ -85,13 +90,14 @@ class Strategy(metaclass=ABCMeta):
     def buy(self, symbol: str, amount: float) -> Action:
         """Buy a dollar amount of an asset during current increment."""
         
-        if amount > self.available_funds + SMALL_DOLLARS:
+        if amount > self.state.available_funds + SMALL_DOLLARS:
             raise NoMoneyError('Not enough funds for buy.')
             
-        self._delete_transaction_cache()
         self._increment_small_time()
         trade = self._transactions.buy(
             date=self._date, symbol=symbol, amount=amount)
+        self._update_state()
+        
         return trade
         
         
@@ -101,19 +107,20 @@ class Strategy(metaclass=ABCMeta):
         if symbol == '':
             return
         
-        self._delete_transaction_cache()
         self._increment_small_time()
         trade =  self._transactions.sell(
             date=self._date, symbol=symbol, amount=amount)
+        self._update_state()
         return trade
         
         
     def sell_percent(self, symbol: str, amount: float) -> Action:
         """Sell a percentage of an asset during current increment."""
-        self._delete_transaction_cache()
         self._increment_small_time()
         trade = self._transactions.sell_percent(
             date=self._date, symbol=symbol, amount=amount)
+        self._update_state()
+        
         return trade
 
 
@@ -139,49 +146,8 @@ class Strategy(metaclass=ABCMeta):
             warnings.warn(
                 f'The following stocks have been delisted for {self.date}: '
                 f'{symbols}')
-        return symbols
-        
-        
-    @cached_property
-    def available_funds(self) -> float:
-        """Available cash for trading during current increment."""
-        return self._transactions.last_available_funds()
-    
-    
-    @cached_property
-    def asset_values(self) -> pd.Series:
-        """Pandas Series of asset value of each traded symbol for current increment."""
-        return self._transactions.get_asset_values(self._date)
-    
-    
-    @cached_property
-    def equity(self) -> float:
-        funds = self.available_funds
-        try:
-            assets = self.asset_values.values.sum()
-        except IndexError:
-            assets = 0
-        return funds + assets
+        return symbols        
 
-    
-    
-    @cached_property
-    def stock_data(self) -> dict[pd.DataFrame]:
-        """dict[DataFrame] : Dataframes for each symbol for the current increment."""
-        return self._indicators.stock_data.filter_dates(end=self._date)  
-
-    
-    @cached_property
-    def existing_symbols(self) -> list[str]:
-        """Symbols which exist at the current date increment."""
-        return self._indicators.stock_data.existing_symbols(self.date)
-    
-    
-    @cached_property
-    def unlisted_symbols(self) -> list[str]:
-        """Symbols which do not exist at the current date increment."""
-        return self._indicators.stock_data.unlisted_symbols(self.date)
-    
     
     def indicator(self,
                   func: Callable, 
@@ -238,69 +204,7 @@ class Strategy(metaclass=ABCMeta):
         indicators = self._indicators
         for indicator in indicators:
             indicator.set_stock_data(stock_data)
-        
-    
-    def __backup_indicator(self,
-                  func: Callable, 
-                  *args,
-                  name: str=None, 
-                  **kwargs) -> "_IndicatorValue":
-        """Create an indicator and return a `_IndicatorValue.
 
-        Parameters
-        ----------
-        func : Callable
-            Function to calculate indicator. `func` must accept a dataframe
-            using keyword argument `df`:
-                
-            >>> value = func(*args, df=df, **kwargs)
-            
-            df : pd.DataFrame
-                Pandas dataframe of data retrieved from `StockData` object
-                found in `Backtest`.
-            value : dict or np.ndarray
-                Indicator values for each row of dataframe. 
-            
-        *args : 
-            Positional arguments for `func`.
-        name : str, optional
-            Name of indicator for dataframes. The default is None.
-        **kwargs : 
-            Keyword arguments for `func`.
-
-        Returns
-        -------
-        _IndicatorValue
-            Object used to retrieve indicator values in `self.next` for
-            each stock symbol. For example:
-            
-            .. code-block :: python
-                        
-                def init(self):
-                    self.my_indicator = self.indicator(func1)
-                    
-                def next(self):
-                    symbol = 'MSFT'
-                    value = self.my_indicator(symbol)
-
-        """
-        name = self._indicators.create(func, *args, name=name, **kwargs)
-        return _IndicatorValue(
-            name=name,
-            indicators=self._indicators,
-            strategy=self)
-    
-    
-    @property
-    def date(self):
-        """The date of the current simulation increment."""
-        return self._date
-    
-    
-    @property
-    def days_since_start(self):
-        """Days since the beginning of simulation for the current simulation increment."""
-        return self._days_since_start
 
 class IndicatorValue:
     """Store reference to indicator, retrieve the indicator data for 
@@ -339,7 +243,85 @@ class IndicatorValue:
     
     
 
-class StrategyState:
+# class StrategyState:
+#     def __init__(self, strategy: Strategy):
+#         self._strategy = strategy
+#         self._transactions = strategy._transactions
+#         self._indicators = strategy._indicators
+        
+        
+        
+#     def _update(self):
+#         delete_attr(self, 'asset_values')
+#         delete_attr(self, 'stock_data')
+#         delete_attr(self, 'existing_symbols')
+#         delete_attr(self, 'unlisted_symbols')
+#         delete_attr(self, 'equity')    
+        
+#     def _update_transactions(self):
+#         delete_attr(self, 'available_funds')
+#         delete_attr(self, 'asset_values')    
+    
+    
+    
+#     @property
+#     def date(self):
+#         """The date of the current simulation increment."""
+#         return self._strategy._date
+    
+    
+#     @property
+#     def days_since_start(self):
+#         """Days since the beginning of simulation for the current simulation increment."""
+#         return self._strategy._days_since_start
+
+    
+    
+#     @cached_property
+#     def available_funds(self) -> float:
+#         """Available cash for trading during current increment."""
+#         return self._transactions.last_available_funds()
+    
+    
+#     @cached_property
+#     def asset_values(self) -> pd.Series:
+#         """Pandas Series of asset value of each traded symbol for current increment."""
+#         return self._transactions.get_asset_values(self._date)
+    
+    
+#     @cached_property
+#     def equity(self) -> float:
+#         funds = self.available_funds
+#         try:
+#             assets = self.asset_values.values.sum()
+#         except IndexError:
+#             assets = 0
+#         return funds + assets
+
+    
+#     @cached_property
+#     def stock_data(self) -> dict[pd.DataFrame]:
+#         """dict[DataFrame] : Dataframes for each symbol for the current increment."""
+#         return self._indicators.stock_data.filter_dates(end=self.date)  
+
+    
+#     @cached_property
+#     def existing_symbols(self) -> list[str]:
+#         """Symbols which exist at the current date increment."""
+#         return self._indicators.stock_data.existing_symbols(self.date)
+    
+    
+#     @cached_property
+#     def unlisted_symbols(self) -> list[str]:
+#         """Symbols which do not exist at the current date increment."""
+#         return self._indicators.stock_data.unlisted_symbols(self.date)
+    
+    
+#     def return_ratios(self):
+#         self._transactions.reset
+    
+    
+    
     
     
     
@@ -474,11 +456,16 @@ class Backtest:
         
     def reset(self, time_index=0):
         """Reset backtester."""
+        
+        date = self.active_days[0]
+        
         self.strategy : Strategy
         self.strategy.init()
         self.strategy.set_indicator_data(self.stock_data)
+        self.strategy._set_data(date, 0)
+        
         self.transactions.reset()
-        self.transactions.hold(self.active_days[0])
+        self.transactions.hold(date)
         self.time_index = time_index
         
 
@@ -557,7 +544,7 @@ class BacktestStats:
         # Get stock price
         for symbol in symbols:
             st = transactions.get_symbol_transactions(symbol)
-            price = st.get_price(dates)
+            price = st.get_prices(dates)
             d[symbol] = price / price[0]
         
         # Get our equity
@@ -581,7 +568,7 @@ class BacktestStats:
             commission=transactions.commission
             )        
         
-        prices = st.get_price(dates2)
+        prices = st.get_prices(dates2)
         
         return prices[-1] / prices[0]
     

@@ -33,7 +33,7 @@ class Strat1(Strategy):
                 
         # MAX_ALLOWED = 30
 
-        new_stocks = self.existing_symbols
+        new_stocks = self.market_state.existing_symbols
         
         if len(new_stocks) == len(self.current_stocks):
             if np.all(new_stocks == self.current_stocks):
@@ -54,7 +54,7 @@ class Strat1(Strategy):
                 to_buy.append(new_stock)
         
         if len(to_buy) > 0:
-            new_amount = self.available_funds / len(to_buy)
+            new_amount = self.state.available_funds / len(to_buy)
             for new_stock in to_buy:
                 self.buy(new_stock, new_amount)
                 

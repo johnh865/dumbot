@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import pdb
 import datetime
 import copy
 
@@ -78,11 +78,11 @@ class LazyMap(MutableMapping):
         
         
     def __iter__(self):
-        return iter(self._dict)
+        return iter(self._func_dict)
     
     
     def __len__(self):
-        return len(self._dict)
+        return len(self._func_dict)
         
     
     def apply(self, func: Callable):
@@ -414,6 +414,19 @@ class BaseData(metaclass=ABCMeta):
         return new
         
         
+
+class MapData(BaseData):
+    def  __init__(self, keys, function: Callable, values=None):
+        self._lazy_map = LazyMap(keys, function, values)
+        
+        
+    def retrieve(self, symbol: str):
+        return self._lazy_map[symbol]
+    
+    
+    def retrieve_symbol_names(self):
+        return list(self._lazy_map.keys())
+    
     
     
     

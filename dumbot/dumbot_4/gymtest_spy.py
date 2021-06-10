@@ -15,23 +15,23 @@ from backtester import gym
 
 env = gym.env_spy()
 settings = Settings(
-    epsilon_decay=.0004,
-    epsilon_final=0.5,
+    epsilon_decay=.0007,
+    epsilon_final=0,
     lr=.002
     )
 
 cache = Cache(globals())
 
 @cache.decorate
-def train(numiters=2000):
+def train(numiters=2000, epsilon=1.0):
     trainer = Trainer(env, settings)
-    df = trainer.train(numiters)
+    df = trainer.train(numiters, epsilon)
     state_dict = trainer.target_net.state_dict()
     return state_dict, df
 
 
 trainer = Trainer(env, settings)
-state_dict, df0 = train(4000)
+state_dict, df0 = train(1000)
 trainer.load_state_dict(state_dict)
 
 scores, df = trainer.test(100)

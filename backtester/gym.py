@@ -23,21 +23,10 @@ class EnvStrategy(Strategy):
         self.action = 0
         self.is_holding = False
         self.symbol = ''
-        self.start_equity = 0.
-
-    
-    def return_ratio(self):
-        if self.is_holding:
-            return (self.equity - self.start_equity) / self.start_equity
-        else:
-            return 0
-
+        # self.start_equity = 0.
 
 
     def next(self):
-        
-        
-        
         if self.is_holding:
             if self.action == 0:
                 self.sell_percent(self.symbol, 1.0)
@@ -45,10 +34,10 @@ class EnvStrategy(Strategy):
                 # print('selling')
         else:
             if self.action == 1:
-                action = self.buy(self.symbol, self.available_funds)
+                action = self.buy(self.symbol, self.state.available_funds)
                 self.is_holding = True
                 
-                self.start_equity = self._transactions.balances[-1].equity
+                # self.start_equity = self._transactions.balances[-1].equity
                 # print('buying')
     
     
@@ -115,8 +104,6 @@ class EnvBase:
         
     def step(self, action: int):
         
-        
-        
         strategy = self.backtest.strategy
         strategy.action = action
         self.backtest.step()
@@ -132,7 +119,7 @@ class EnvBase:
         return obs, reward, done, info
         
     
-    def reset(self):
+    def reset(self, time_index=None):
         rng: Generator = self._rng
         stock_data = self.stock_data
         
@@ -141,7 +128,11 @@ class EnvBase:
         times =  stock_data.dataframes[self.symbol].index.values
         tnum = len(times) - self.game_length - 1
         i1 = rng.integers(0, tnum)
+        if time_index is not None:
+            i1 = time_index
+        
         i2 = i1 + self.game_length
+
         self.time_index = i1
         self.stop_index = i2
         self._prices = stock_data.dataframes[self.symbol][self.price_name].values
@@ -162,12 +153,7 @@ class EnvBase:
     
     
     def _calc_assets(self):
-        funds = self.backtest.strategy.available_funds
-        try:
-            assets = self.backtest.strategy.asset_values.values[0]
-        except IndexError:
-            assets = 0
-        return funds + assets
+        return self.backtest.strategy.state.asset_net
         
         
     def _observe(self):
@@ -184,8 +170,10 @@ class EnvBase:
     
     
     def _return_ratio(self):
-        return self.backtest.strategy.return_ratio()
-    
+        try:
+            return self.backtest.strategy.state.return_ratios.values[0]
+        except IndexError:
+            return 0.0
     
     def _done(self):
         if self.time_index >= self.stop_index:
@@ -304,6 +292,7 @@ def env_spy(seed=0):
                  indicators=indicators,
                  price_name=DF_ADJ_CLOSE,
                  seed=seed,
+                 commission=0,
                  )
    env.reset()
    return env

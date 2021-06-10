@@ -449,7 +449,7 @@ class SymbolTransactions:
     
     def get_share_valuations(self, date: np.ndarray) -> np.ndarray:
         """Calculate value of shares at the given dates."""
-        price = self.get_price(date)
+        price = self.get_prices(date)
         shares = self.get_shares(date)
         value = price * shares
         return value
@@ -463,8 +463,12 @@ class SymbolTransactions:
         return value    
     
     
-    def get_price(self, date: np.ndarray) -> np.ndarray:
+    def get_price(self, date: np.datetime64) -> float:
         return self._price_interpolator.scalar(date)
+    
+    
+    def get_prices(self, dates: np.ndarray) -> np.ndarray:
+        return self._price_interpolator.array(dates)
     
 
     
@@ -957,10 +961,98 @@ class Transactions:
     
 
 
+class TransactionsLastState:
+    def __init__(self, transactions: Transactions, date: np.datetime64):
+        self._transactions = transactions
+        self._stock_data = transactions.stock_data
+        self.date = date
+        
+        actions = self._transactions.executed_actions
+        
+        if len(actions) > 0:
+            last_action = actions[-1]
+            last_transaction_date = last_action.date
+            if last_transaction_date > date:
+                raise BacktestError(
+                    f'date {date} cannot be less than '
+                    f'last transaction date {last_transaction_date}.')
+            
+    
+        
+    @cached_property
+    def asset_values(self) -> pd.Series:
+        """Value of each asset."""
+        return self._transactions.get_asset_values(self.date)
+    
+    
+    @cached_property
+    def asset_net(self) -> float:
+        """Net value of all assets."""
+        funds = self.available_funds
+        assets = self.asset_values.sum()
+        return funds + assets
+    
+    
+    @cached_property
+    def asset_shares(self) -> pd.Series:
+        """# of shares bought for each asset."""
+
+        sdict = self._transactions._get_symbol_transactions_dict()
+        date = self.date
+        new = {}
+        st : SymbolTransactions
+        for symbol, st in sdict.items():
+            date = np.datetime64(date)
+            value = st.last_shares()
+            new[symbol] = value
+        return pd.Series(new)    
+
+    
+    @cached_property
+    def return_ratios(self) -> pd.Series:
+        """Ratio of return price since buy from zero shares."""
+        return self._transactions.get_return_ratios(self.date)
+    
+    
+    @cached_property
+    def available_funds(self) -> float:
+        return self._transactions.last_available_funds()
+        
+
+    @cached_property
+    def equity(self) -> float:
+        funds = self.available_funds
+        try:
+            assets = self.asset_values.values.sum()
+        except IndexError:
+            assets = 0
+        return funds + assets
 
 
-
-
-
+class MarketState:
+    def __init__(self, transactions: Transactions, date: np.datetime64):
+        self._transactions = transactions
+        self._stock_data = transactions.stock_data
+        self.date = date
         
         
+    @cached_property
+    def stock_data(self) -> dict[pd.DataFrame]:
+        """dict[DataFrame] : Dataframes for each symbol for the current increment."""
+        return self._stock_data.filter_dates(end=self.date)  
+
+    
+    @cached_property
+    def existing_symbols(self) -> list[str]:
+        """Symbols which exist at the current date increment."""
+        return self._stock_data.existing_symbols(self.date)
+    
+    
+    @cached_property
+    def unlisted_symbols(self) -> list[str]:
+        """Symbols which do not exist at the current date increment."""
+        return self._stock_data.unlisted_symbols(self.date)
+    
+    
+    
+    
