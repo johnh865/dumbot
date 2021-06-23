@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import linregress
 from backtester.exceptions import NotEnoughDataError
-
+from backtester.utils import round_to_quarters
 import pdb
 
 
@@ -119,10 +119,21 @@ def array_windows_index(x: np.ndarray,
     return intervals
 
 
+def array_intervals_index(x: np.ndarray, 
+                          index_start: np.ndarray,
+                          index_end: np.ndarray):
+    ilen1 = len(index_start)
+    ilen2 = len(index_end)
+    col_lengths = np.max(index_end - index_start)
+    intervals = np.zeros((ilen1, col_lengths))
+    intervals[:] = np.nan
+    for ii, (k_start, k_end) in enumerate(zip(index_start, index_end)):    
+        intervals[ii, 0 : (k_end - k_start)] = x[k_start : k_end]
+    return intervals
 
 
 def append_nan(arr, window: int):
-    nans = np.empty(window)
+    nans = np.empty(window - 1)
     nans[:] = np.nan
     return np.append(nans, arr)        
 
@@ -285,7 +296,7 @@ class TrailingBase:
 
         
     @cached_property
-    def _adj_close_intervals(self) -> np.ndarray:
+    def _values_intervals(self) -> np.ndarray:
         """list[pandas.Series] : Close Intervals on where to calculate statistics."""
         # tnum = len(self.series.index) - self.window_size
         # series = self.series
@@ -304,7 +315,7 @@ class TrailingBase:
 
 
         
-class TrailingBaseOLD:
+class __TrailingBaseOLD:
     def __init__(self, series : pd.Series, 
                  window_size : int, skip: int=1):
         self.window_size = np.int64(window_size)
@@ -318,8 +329,6 @@ class TrailingBaseOLD:
         return self.series.index.values[:: self.skip]
     
     
-    
-    
     @cached_property
     def _time_days_int_noskip(self):
         tdelta = self.series.index - self.series.index[0]
@@ -328,7 +337,6 @@ class TrailingBaseOLD:
         except TypeError:
             pass
         return np.asarray(tdelta)
-        
 
 
     @cached_property
@@ -369,7 +377,7 @@ class TrailingBaseOLD:
 
         
     @cached_property
-    def _adj_close_intervals(self) -> np.ndarray:
+    def _values_intervals(self) -> np.ndarray:
         """list[pandas.Series] : Close Intervals on where to calculate statistics."""
         # tnum = len(self.series.index) - self.window_size
         # series = self.series
@@ -397,13 +405,13 @@ class TrailingStats(TrailingBase):
         https://mathworld.wolfram.com/LeastSquaresFitting.html"""
         
         x = np.asarray(x)
-        xmean = np.mean(x, axis=1)
-        ymean = np.mean(y, axis=1)        
+        xmean = np.nanmean(x, axis=1)
+        ymean = np.nanmean(y, axis=1)        
         x1 = x - xmean[:, None]
         y1 = y - ymean[:, None]
-        ss_xx = np.sum(x1**2, axis=1)
-        ss_xy = np.sum(x1 * y1, axis=1)
-        ss_yy = np.sum(y1**2, axis=1)
+        ss_xx = np.nansum(x1**2, axis=1)
+        ss_xy = np.nansum(x1 * y1, axis=1)
+        ss_yy = np.nansum(y1**2, axis=1)
         
         m = ss_xy / ss_xx
         b = ymean - m * xmean
@@ -414,9 +422,7 @@ class TrailingStats(TrailingBase):
         # r = self._append_nan(r)
         return m, b, r
     
-    
-    
-    
+
     
     @cached_property
     def _exponential_regression_check(self):
@@ -425,7 +431,7 @@ class TrailingStats(TrailingBase):
         interval : pd.Series
         slopes = []
         intercepts = []
-        closes = self._adj_close_intervals
+        closes = self._values_intervals
         times = self._time_days_int_intervals
         
         for time, interval in zip(times, closes):
@@ -452,7 +458,7 @@ class TrailingStats(TrailingBase):
         amplitude :
             Parameter `ln(C)` in equation y = C*exp(m*t)
         """
-        closes = self._adj_close_intervals
+        closes = self._values_intervals
         x = self._time_days_int_intervals
         y = np.log(closes)
         slopes, b, _ = self._regression(x, y)
@@ -461,9 +467,9 @@ class TrailingStats(TrailingBase):
         
     
     @cached_property
-    def linear_regression(self):
-        """(np.array, np.array) : Slope and intercept within window"""
-        closes = self._adj_close_intervals
+    def linear_regression(self) -> (np.ndarray, np.ndarray, np.ndarray):
+        """(np.array, np.array) : Slope, intercept, and r-value within window"""
+        closes = self._values_intervals
         times = self._time_days_int_intervals
         slopes, b, r = self._regression(times, closes)
         return slopes, b, r
@@ -472,7 +478,7 @@ class TrailingStats(TrailingBase):
     @cached_property
     def _slope_normalized_check(self):
         m, y0, r = self.linear_regression
-        y = self.rolling_avg
+        y = self.mean
         return m / y
     
 
@@ -480,25 +486,25 @@ class TrailingStats(TrailingBase):
     def slope_normalized(self):
         """Slope normalized by mean value"""
         x = np.array(self._time_days_int_intervals)
-        y = self._adj_close_intervals
+        y = self._values_intervals
         
-        xmean = np.mean(x, axis=1)
-        ymean = np.mean(y, axis=1)
+        xmean = np.nanmean(x, axis=1)
+        ymean = np.nanmean(y, axis=1)
         x1 = x - xmean[:, None]
         y1 = y - ymean[:, None]
-        ss_xx = np.sum(x1**2, axis=1)
-        ss_xy = np.sum(x1 * y1, axis=1)
+        ss_xx = np.nansum(x1**2, axis=1)
+        ss_xy = np.nansum(x1 * y1, axis=1)
         
         m = ss_xy / ss_xx
         # m = self._append_nan(m)
-        yavg = self.rolling_avg
+        yavg = self.mean
         return m / yavg
     
     
     @cached_property
     # @TrailingBase._append_nan_dec
-    def rolling_avg(self):
-        arr = np.asarray(self._adj_close_intervals)
+    def mean(self):
+        arr = np.asarray(self._values_intervals)
         smoothed = np.mean(arr, axis=1)
         return smoothed
     
@@ -552,29 +558,38 @@ class TrailingStats(TrailingBase):
         Try to measure volatility."""
         
         y_reg = self.exp_reg_value[:, None]
-        y_intervals = self._adj_close_intervals
+        y_intervals = self._values_intervals
         delta = (y_intervals - y_reg) / y_reg
-        return np.std(delta, axis=1)
+        return np.nanstd(delta, axis=1)
+    
+    
+    @cached_property
+    def std_dev(self):
+        return np.nanstd(self._values_intervals, axis=1)
+    
+    
     
     
     @cached_property
     # @TrailingBase._append_nan_dec
     def max_loss(self):
         """Max loss of current day considering previous days."""
-        closes = self._adj_close_intervals
-        maxes = np.max(closes, axis=1)
-        last = closes[:, -1]
+        closes = self._values_intervals
+        maxes = np.nanmax(closes, axis=1)
+        values = self.series.values
+        last = values[self._index_end  - 1]
         return (maxes - last) / maxes
-    
     
     
     @cached_property
     # @TrailingBase._append_nan_dec
     def max_gain(self):
         """Max loss of current day considering previous days."""
-        closes = self._adj_close_intervals
-        mins = np.min(closes, axis=1)
-        last = closes[:, -1]
+        closes = self._values_intervals
+        mins = np.nanmin(closes, axis=1)
+        
+        values = self.series.values
+        last = values[self._index_end  - 1]
         return (last - mins) / mins    
     
     
@@ -582,36 +597,237 @@ class TrailingStats(TrailingBase):
     # @TrailingBase._append_nan_dec
     def return_ratio(self):
         """Get ratio of start to end value."""
-        closes = self._adj_close_intervals
-        start = closes[:, 0]
-        last = closes[:, -1]
+        values = self.series.values
+        start = values[self._index_start]
+        last = values[self._index_end  - 1]
         return (last - start) / start
     
-            
-        
-    
-
+         
 
 class FutureStats(TrailingStats):
+    @cached_property
+    def _index_display(self) -> np.ndarray:
+        """Index which marks time points to be output as representative of inteval."""
+        return self._index_start
+    
+    
+
+class TrailingIntervals(TrailingStats):
+    def __init__(self, series : pd.Series, 
+                 window_size : int):
+        self.window_size = np.int64(window_size)
+        self.series = series   
+        
     
     @cached_property
-    def times(self) -> np.ndarray:
-        """Associated times for output properties."""
-        return self.series.index.values[self.window_size :]
+    def _get_index(self):
+        times = self.series.index
+        tnum = len(times)
+        # leftover = tnum % self.window_size
+        # indices = np.arange(tnum - 1 , -1-leftover, -self.window_size)
+        indices = np.arange(0, tnum, self.window_size)
+        index_start = indices[0 : -1]
+        index_end = indices[1:] + 1
+        return index_start, index_end
+
+
+    @cached_property
+    def _index_start(self) -> np.ndarray:
+        return self._get_index[0]
+
+        
+    @cached_property
+    def _index_end(self) -> np.ndarray:
+        return self._get_index[1]
+
+    @cached_property
+    def _index_display(self) -> np.ndarray:
+        """Index which marks time points to be output as representative of inteval."""
+        return self._index_end
+            
+
+    @cached_property
+    def _time_days_int_intervals(self):
+        """Construct time intervals for windowing."""
+        times = self._time_days_int_noskip
+        return array_intervals_index(times, 
+                                   self._index_start,
+                                   self._index_end,)
+        
+
+        
+    @cached_property
+    def _values_intervals(self) -> np.ndarray:
+        """list[pandas.Series] : Close Intervals on where to calculate statistics."""
+        # tnum = len(self.series.index) - self.window_size
+        # series = self.series
+        values = self.series.values
+        return array_intervals_index(values, 
+                                   self._index_start,
+                                   self._index_end,)
     
-    def _append_nan(self, arr):
-        """Append nan to beginning of array for window."""
-        nans = np.empty(self.window_size)
-        nans[:] = np.nan
-        return np.append(arr, nans)        
+
+
+class QuarterStats(TrailingIntervals):
+    def __init__(self, series : pd.Series):
+        self.series = series   
+        
+        
+    @cached_property
+    def _get_index(self):
+        times = self.series.index
+        quarters = times.quarter.values
+        years = times.year.values        
+        
+        first_year = years.min()
+        last_year = years.max()
+        quarter_range = [1,2,3,4]
+        year_range = range(first_year, last_year + 1)
+        
+        index_start = []
+        index_end = []
+        
+        for year in year_range:
+            for quarter in quarter_range:
+                bool_arr = (quarter == quarters) & (year == years)
+                locs = np.where(bool_arr)[0]
+                if len(locs) > 0:
+                    loc_min = np.min(locs)
+                    loc_max = np.max(locs) + 1
+                    index_start.append(loc_min)
+                    index_end.append(loc_max)
+        
+        index_start = np.array(index_start)
+        index_end = np.array(index_end)
+        return index_start, index_end
+    
+    
+    @cached_property
+    def _index_start(self) -> np.ndarray:
+        return self._get_index[0]
+
+        
+    @cached_property
+    def _index_end(self) -> np.ndarray:
+        return self._get_index[1]
+
+    
+    
+    @cached_property
+    def _index_display(self) -> np.ndarray:
+        """Index which marks time points to be output as representative of inteval."""
+        return self._index_start
+
+
+
+    @cached_property
+    def times(self):
+        
+        t1 = self.series.index.values[self._index_display]
+        return round_to_quarters(t1)
+    
+    
     
 
+    
+class MonthlyStats(QuarterStats):
+    def __init__(self, series : pd.Series):
+        self.series = series   
+        
+        
+    # @cached_property
+    # def _get_index(self):
+    #     times = self.series.index
+    #     months = times.month.values
+    #     years = times.year.values        
+        
+    #     first_year = years.min()
+    #     last_year = years.max()
+    #     month_range = range(1, 13)
+    #     year_range = range(first_year, last_year + 1)
+        
+    #     index_start = []
+    #     index_end = []
+        
+    #     for year in year_range:
+    #         for month in month_range:
+    #             bool_arr = (month == months) & (year == years)
+    #             locs = np.where(bool_arr)[0]
+    #             if len(locs) > 0:
+    #                 loc_min = np.min(locs)
+    #                 loc_max = np.max(locs) + 1
+    #                 index_start.append(loc_min)
+    #                 index_end.append(loc_max)
+        
+    #     index_start = np.array(index_start)
+    #     index_end = np.array(index_end)
+    #     return index_start, index_end
+    
+    @cached_property
+    def _get_index(self):
+        times = self.series.index
+        # tnum = len(times)
+        month_days = times.day
+        locs = month_days == 1
+        indices = np.where(locs)[0]
+        
+        # indices = np.arange(0, tnum, self.window_size)
+        index_start = indices[0 : -1]
+        index_end = indices[1:] + 1
+        return index_start, index_end
+    
+    
+    
+
+    @cached_property
+    def times(self):
+        t1 = self.series.index.values[self._index_display]
+        return t1.astype('datetime64[M]')  
+    
+
+class WeeklyStats(MonthlyStats):
+    """Get weekly stats using iso calendar."""
+    def __init__(self, series: pd.Series, num_weeks=1):
+        self.num_weeks = num_weeks
+        self.series = series
+        
+        
+    @cached_property
+    def _get_index(self):
+        # 52 full weeks in a year
+        # 53 weeks in year, 53rd has 1 or 2 days.
+        
+        times = self.series.index
+        calendar = times.isocalendar()
+
+        break_indices = np.where(calendar.day == 1)[0]
+        if self.num_weeks > 1:
+            break_indices = break_indices[:: self.num_weeks]
+        
+        index_start = break_indices[0 : -1]
+        index_end = break_indices[1:]
 
 
-x = np.arange(100)
-y = x ** 2
-s = pd.Series(y, index=x)
-t = TrailingStats(s, 11, 3)
-t = TrailingStats(s, 10)
-t.rolling_avg
+        return index_start, index_end
+        
 
+
+    @cached_property
+    def times(self):
+        t1 = self.series.index.values[self._index_display]
+        return t1.astype('datetime64[D]') 
+    
+    
+        
+# x = np.arange(100)
+# y = x ** 2
+# s = pd.Series(y, index=x)
+# t = TrailingStats(s, 11, 3)
+# t = TrailingStats(s, 10)
+# t.rolling_avg
+
+
+
+# def trailing_sharpe(series: pd.Series, period, num_periods):
+#     ts = TrailingStats(series, window_size=period)
+    

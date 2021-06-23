@@ -986,11 +986,16 @@ class TransactionsLastState:
     
     
     @cached_property
-    def asset_net(self) -> float:
-        """Net value of all assets."""
-        funds = self.available_funds
-        assets = self.asset_values.sum()
-        return funds + assets
+    def current_stocks(self) -> pd.Series:
+        return self.asset_values[self.asset_values.values > 0]
+    
+    
+    # @cached_property
+    # def asset_net(self) -> float:
+    #     """Net value of all assets."""
+    #     funds = self.available_funds
+    #     assets = self.asset_values.sum()
+    #     return funds + assets
     
     
     @cached_property
@@ -1021,6 +1026,7 @@ class TransactionsLastState:
 
     @cached_property
     def equity(self) -> float:
+        """Net value of all assets and funds."""
         funds = self.available_funds
         try:
             assets = self.asset_values.values.sum()

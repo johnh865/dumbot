@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-
+import pdb
 import datetime
 import numpy as np
-
+import pandas as pd
     
 def get_trading_days(dates : np.ndarray,
                      date1 : datetime.date, 
@@ -59,3 +59,45 @@ def floor_to_date(date: datetime.datetime):
 def floor_dates(dates: np.ndarray):
     """Floor dates to day."""
     return np.asarray(dates).astype('datetime64[D]')
+
+
+
+
+
+EPOCH = np.datetime64('1970-01')
+EPOCH_YR = np.datetime64('0')
+
+def get_year(dates: np.ndarray):
+    dates = dates.astype('datetime64[Y]')
+    delta = dates - EPOCH_YR
+    return delta.astype(int)
+
+
+def get_quarters(dates: np.ndarray):    
+    # dates = dates.astype('datetime64[M]')
+    # delta = dates - EPOCH + 1
+    # quarters = delta.astype(int) // 3 % 4 + 1
+    return pd.DatetimeIndex(dates).quarter.values
+    
+
+
+def round_to_quarters(dates: np.ndarray) -> np.ndarray:
+    year = get_year(dates) + EPOCH_YR
+    quarters = get_quarters(dates)
+    months = quarters * 3 - 2
+    date = year.astype('datetime64[Y]').astype('datetime64[M]')
+    
+    return date + months - 1
+    
+    
+
+
+
+
+
+
+
+
+
+    
+    

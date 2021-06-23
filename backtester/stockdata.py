@@ -19,6 +19,11 @@ from datasets.yahoo import (
     read_yahoo_trade_dates,
     )
 from backtester.exceptions import DataError, NotEnoughDataError
+from backtester.utils import SQLClient
+
+
+TABLE_PREFIX = 'symbol-'
+SYMBOL_TABLE = 'good-symbol-list'
 
 
 class LazyMap(MutableMapping):
@@ -322,7 +327,7 @@ class BaseData(metaclass=ABCMeta):
     
     
     def map(self, func: Callable):
-        new = copy.copy(self)
+        new = copy.deepcopy(self)
         new.tables = self.tables.map(func)
         return new
     
@@ -426,6 +431,42 @@ class MapData(BaseData):
     
     def retrieve_symbol_names(self):
         return list(self._lazy_map.keys())
+    
+    
+class DictData(BaseData):
+    def __init__(self, d: dict):
+        self.dict = d
+    
+        
+    def retrieve(self, symbol: str):
+        return self.dict[symbol]
+    
+    
+    def retrieve_symbol_names(self):
+        return list(self.dict.keys())
+
+    
+class SQLData(BaseData):
+    def __init__(self, url, kwargs=None, symbols=()):
+        if kwargs is None:
+            kwargs = {}
+        self.client = SQLClient(url, **kwargs)
+
+        if len(symbols) == 0:
+            symbols = self.retrieve_symbol_names()
+        self.symbols = symbols
+        
+        
+    def retrieve(self, symbol: str):
+        name = TABLE_PREFIX + symbol
+        return self.client.read_dataframe(name)
+    
+    
+    def retrieve_symbol_names(self):
+        name = SYMBOL_TABLE
+        df = self.client.read_dataframe(name)
+        return list(df['symbol'].values)
+    
     
     
     
@@ -574,5 +615,29 @@ class Indicators(BaseData):
         #         df2[newname] = value
                 
         return df2
+
     
+def to_sql(connection, data: dict,
+           symbol_prefix='symbol-',
+           symbol_table='good-symbol-list'):
+    
+    # TABLE_GOOD_SYMBOL_DATA = 'good-symbol-list'
+    # TABLE_SYMBOL_PREFIX = 'symbol-'
+    client = SQLClient(connection)
+
+    names = data.keys()
+    df = pd.Series(names, name='symbol').to_frame()
+    with client.connect():
+        client.save_dataframe(df, symbol_table)
+
+        for name in names:
+            df = data[name]
+            table_name = symbol_prefix + name
+            client.save_dataframe(df, table_name)
+            
+        
+
+    
+
+
 

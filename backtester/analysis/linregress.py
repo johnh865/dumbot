@@ -93,38 +93,49 @@ from backtester.stockdata import YahooData
 from backtester.definitions import DF_ADJ_CLOSE
 
 yahoo = YahooData()
-s1 = yahoo.dataframes['GOOG'][DF_ADJ_CLOSE]
-s2 = yahoo.dataframes['MSFT'][DF_ADJ_CLOSE]
-s3 = yahoo.dataframes['SPY'][DF_ADJ_CLOSE]
+symbols = yahoo.symbols.copy()
+np.random.shuffle(symbols)
 
-r1 = RegressionSeries(s1, s2, 30)
-r2 = RegressionSeries(s1, s3, 30)
+
+symbol1 = symbols[0]
+symbol2 = symbols[1]
+symbol_base = 'SPY'
+
+
+s1 = yahoo.dataframes[symbol1][DF_ADJ_CLOSE]
+s2 = yahoo.dataframes[symbol2][DF_ADJ_CLOSE]
+s3 = yahoo.dataframes[symbol_base][DF_ADJ_CLOSE]
+
+r1 = RegressionSeries(s3, s1, 60)
+r2 = RegressionSeries(s3, s2, 60)
+
+plt.figure()
 
 plt.subplot(2,2,1,)
 plt.title('Correlation Coeff vs Time')
-plt.plot(r1.index, r1.r, label='GOOG-MSFT')
-plt.plot(r2.index, r2.r, label='GOOG-SPY')
+plt.plot(r1.index, r1.r, label=f'{symbol1}-{symbol_base}')
+plt.plot(r2.index, r2.r, label=f'{symbol2}-{symbol_base}')
 plt.legend()
 plt.grid()
 
 plt.subplot(2,2,3)
 plt.plot(r1.x, r1.y, '.', alpha=.2)
-plt.xlabel('GOOG')
-plt.ylabel('MSFT')
+plt.xlabel(symbol_base)
+plt.ylabel(symbol1)
 plt.grid()
 
 
 plt.subplot(2,2,4)
 plt.plot(r2.x, r2.y, '.', alpha=.2)
-plt.xlabel('GOOG')
-plt.ylabel('SPY')
+plt.xlabel(symbol_base)
+plt.ylabel(symbol2)
 plt.grid()
 
 
 ax = plt.subplot(2,2,2)
-plt.plot(r1.index, r1.x, label='GOOG')
-plt.plot(r1.index, r1.y, label='MSFT')
-plt.plot(r2.index, r2.y, label='SPY')
+plt.plot(r1.index, r1.x, label=symbol_base)
+plt.plot(r1.index, r1.y, label=symbol1)
+plt.plot(r2.index, r2.y, label=symbol2)
 plt.legend()
 plt.grid(which='both')
 

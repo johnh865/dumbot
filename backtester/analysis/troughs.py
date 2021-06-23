@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from numba import njit
 
 from backtester.indicators import TrailingStats
-from backtester.smooth import TrailingSavGol
+# from backtester.smooth import TrailingSavGol
 
 from backtester.stockdata import YahooData, Indicators, TableData
 from backtester.definitions import DF_ADJ_CLOSE
@@ -17,9 +17,9 @@ from dataclasses import dataclass
 
 
 yahoo = YahooData()
-symbols = yahoo.get_symbol_names()
+symbols = yahoo.symbol_names
 
-df = yahoo.get_symbol_all('SPY')
+df = yahoo.dataframes['SPY']
 close = df[DF_ADJ_CLOSE]
 
 @njit
@@ -386,3 +386,11 @@ plt.xlim(date1, date2)
 
 tt = TroughAssess(close)
 
+
+plt.figure()
+areas, start_locs, end_locs, areas_final = trough_volume(x)
+
+time_deltas = end_locs - start_locs
+hist, bin_edges = np.histogram(time_deltas, bins=100)
+bin_mid = (bin_edges[1:] + bin_edges[0:-1]) / 2
+plt.semilogy(bin_mid, hist,'.-')

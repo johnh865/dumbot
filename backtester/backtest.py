@@ -526,7 +526,7 @@ class BacktestStats:
         dates_a = df0.index
                 
         df[self.COLUMN_FUNDS] = interp_const_after(dates_a, cash_a, dates)
-        df[self.COLUMN_EQUITY] = df.values.sum(axis=1)
+        df[self.COLUMN_EQUITY] = df.sum(axis=1)
         return df
  
     
@@ -590,7 +590,7 @@ class BacktestStats:
             stock_data=transactions.stock_data,
             commission=transactions.commission
             )   
-        prices = st.get_price(index)
+        prices = st.get_prices(index.values)
         series2 = pd.Series(data=prices, index=index)
 
         r2 = TrailingStats(series2, window_size=window).return_ratio

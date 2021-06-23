@@ -37,6 +37,14 @@ def has_gaps(series: pd.Series, maxsize=10) -> bool:
                    .astype('datetime64[D]')
                    .astype(float))
     return _array_jumps(dates, maxsize=maxsize)
+
+
+def min_points(series: pd.Series, ptnum=200) -> bool:
+    """Demand a minimum number of points."""
+    values = series.values
+    isnan = np.isnan(values)
+    values = values[~isnan]
+    return len(values) < ptnum
     
 
 def get_good_symbols() -> list[str]:
@@ -53,25 +61,34 @@ def get_good_symbols() -> list[str]:
             print(name, 'has data jumps.')
         elif has_gaps(closes):
             print(name, 'has gaps')
+        elif min_points(closes):
+            print(name, 'less than 200 points')
         else:
             print(name, '-- GOOD.')
             good_list.append(name)
+            
+    gnum = len(good_list)
+    print(f'{gnum} # of symbols considered "GOOD".')
     return good_list
     
     
 
-if __name__ == '__main__':
+def save_good_table():
+    """Save TABLE_GOOD_SYMBOL_DATA to database."""
     engine = create_engine(CONNECTION_PATH, echo=False)
     good_list = get_good_symbols()
     
     (pd.Series(good_list, name='symbol')
          .to_frame()
-         .to_sql(name=TABLE_GOOD_SYMBOL_DATA, con=engine))
+         .to_sql(name=TABLE_GOOD_SYMBOL_DATA,
+                 con=engine,
+                 if_exists='replace'))
 
 
 
 
-
+if __name__ == '__main__':
+    save_good_table()
 
 
     

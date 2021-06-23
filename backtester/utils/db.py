@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-
+import pdb
 
 import logging
 import sqlite3
+import numpy as np
 import pandas as pd
 from pandas.io.sql import read_sql
 
@@ -13,8 +14,12 @@ from sqlalchemy import inspect
 
 
 class SQLClient:
-    def __init__(self, *args, **kwargs):
-        self.engine = create_engine(*args, **kwargs)
+    def __init__(self, url, **kwargs):
+        self.engine = create_engine(url, **kwargs)
+        
+        
+    def connect(self):
+        return self.engine.connect()
         
         
     def drop_table(self, table_name: str):
@@ -37,12 +42,33 @@ class SQLClient:
     
     def save_dataframe(self, df: pd.DataFrame, name: str):
         """Save dataframe to database."""
-        df.to_sql(name=name, con=self.engine)
+        df.to_sql(name=name, con=self.engine, if_exists='replace')
+        
+        
+    def append_dataframe(self, df: pd.DataFrame, name: str):
+        """Append dataframe to database."""
+        df_old = self.read_dataframe(name)
+        old_index = df_old.index.values
+        new_index = df.index.values
+        
+        ii = np.searchsorted(old_index, new_index)
+        ii = np.minimum(ii, len(old_index)-1)
+        
+        same_locs = new_index == old_index[ii]
+        diff_locs = ~same_locs
+        df_append = df.iloc[diff_locs]
+        df_append.to_sql(name=name, con=self.engine, if_exists='append')
+        
+        df_new = pd.concat([df_old, df_append])
+        return df_new
         
         
     def read_dataframe(self, name: str):
         """Read from database to dataframe."""
-        return pd.read_sql(name, self.engine)
+        df = pd.read_sql(name, self.engine, index_col=0)
+        index_col = df.columns.values[0]
+        df = df.set_index(index_col)
+        return df
     
     
     def rename_table(self, old: str, new: str):

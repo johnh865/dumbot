@@ -23,7 +23,7 @@ from datasets.yahoo.definitions import (
 
 
 
-def build_trade_dates():
+def _build_trade_dates():
     
     time_old : pd.DataFrame = None
     time_new : pd.DataFrame
@@ -50,16 +50,17 @@ def build_trade_dates():
     return time_old
 
 
-def build_and_save_db():
-    times = build_trade_dates()
+def save_trade_dates():
+    """Save TABE_ALL_TRADE_DATES to database."""
+    times = _build_trade_dates()
     series = pd.Series(times)
     df = series.to_frame(DF_DATE)
     engine = create_engine(CONNECTION_PATH, echo=False)
-    df.to_sql(name=TABLE_ALL_TRADE_DATES, con=engine)
+    df.to_sql(name=TABLE_ALL_TRADE_DATES, con=engine, if_exists='replace')
     return series
     
 
 if __name__ == '__main__':
-    times = build_and_save_db()
+    times = save_trade_dates()
         
             
