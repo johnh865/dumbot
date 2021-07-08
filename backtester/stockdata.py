@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+"""A bunch of classes and functions used to store and retrieve stock data."""
+
 import pdb
 import datetime
 import copy
@@ -19,7 +21,7 @@ from datasets.yahoo import (
     read_yahoo_trade_dates,
     )
 from backtester.exceptions import DataError, NotEnoughDataError
-from backtester.utils import SQLClient
+from backtester.utils import SQLClient, ParquetClient
 
 
 TABLE_PREFIX = 'symbol-'
@@ -447,10 +449,25 @@ class DictData(BaseData):
 
     
 class SQLData(BaseData):
-    def __init__(self, url, kwargs=None, symbols=()):
+    """Get data from SQL.
+    
+    Parameters
+    ----------
+    url : str
+        Database name or URL.
+    kwargs : TYPE, optional
+        optional arguments to pass into create_engine. The default is None.
+    symbols : TYPE, optional
+        Symbols whitelist. The default is () to consider all symbols.
+    prefix : str, optional
+        Table prefix. The default is TABLE_PREFIX.
+    """    
+    def __init__(self, url, kwargs=None, symbols=(), prefix: str=TABLE_PREFIX):
+
         if kwargs is None:
             kwargs = {}
         self.client = SQLClient(url, **kwargs)
+        self.prefix = prefix
 
         if len(symbols) == 0:
             symbols = self.retrieve_symbol_names()
@@ -458,7 +475,7 @@ class SQLData(BaseData):
         
         
     def retrieve(self, symbol: str):
-        name = TABLE_PREFIX + symbol
+        name = self.prefix + symbol
         return self.client.read_dataframe(name)
     
     
@@ -468,7 +485,15 @@ class SQLData(BaseData):
         return list(df['symbol'].values)
     
     
-    
+class ParquetData(SQLData):
+    """Get data from directory of parquet files."""
+    def __init__(self, directory: str, symbols=(), prefix: str=TABLE_PREFIX):
+        self.client = ParquetClient(directory)
+        self.prefix = prefix
+
+        if len(symbols) == 0:
+            symbols = self.retrieve_symbol_names()
+        self.symbols = symbols
     
     
 class YahooData(BaseData):
@@ -572,8 +597,9 @@ class Indicators(BaseData):
         """Calculate indicators for the given symbol."""
         self._locked = True
         df = self.stock_data.dataframes[symbol]
-        df2 = df[[]].copy()
-        df_len = len(df.index)
+        # df2 = df[[]].copy()
+        # df_len = len(df.index)
+        df2 = None
         
         def check_len(value, name_):
             vlen = len(value)
@@ -581,8 +607,9 @@ class Indicators(BaseData):
                 raise ValueError(
                     f'Indicator {name_} length {vlen} does not match '
                     f'stock_data length {df_len} for current increment '
-                    f'for symbol {symbol}.')
-               
+                    f'for symbol {symbol}.')    
+        
+                   
         for name, idata in self._indicators.items():
             (func, args, kwargs) = idata
             try:
@@ -590,20 +617,14 @@ class Indicators(BaseData):
             except TypeError:
                 value = func(df, *args, **kwargs)
                 
-            if type(value) == tuple:
-                for jj, v in enumerate(value):
-                    name2 = name + f'[{jj}]'
-                    check_len(v, name2)
-                    df2[name2] = v
-                    
-            elif issubclass(dict, type(value)):
-                for key, v in value.items():
-                    name2 = name + f"['{key}']"
-                    check_len(v, name2)
-                    df2[name2] = v
-            else:
-                df2[name] = value
-            
+            # check_len(value, name)
+            try:
+                df2 = self._retrieve_set_values(df2, value, name, symbol)
+            except ValueError as exception:
+                s = str(exception)
+                s += f', symbol={symbol}, column={name}'
+                raise ValueError(s)
+            # df_len = 
             
         # for name, idata in self._class_indicators.items():
         #     (cls, args, kwargs) = idata
@@ -615,6 +636,34 @@ class Indicators(BaseData):
         #         df2[newname] = value
                 
         return df2
+    
+            
+    def _retrieve_set_values(self, 
+                             df: pd.DataFrame,
+                             value, 
+                             name: str,
+                             symbol: str):
+        if df is None:
+            if hasattr(value, 'index'):
+                df = pd.DataFrame(index=value.index)
+            else:
+                key = next(iter(self.stock_data.dataframes))
+                df0 = self.stock_data.dataframes[symbol]
+                df = pd.DataFrame(index=df0.index)
+                
+        
+        if type(value) == tuple:
+            for jj, v in enumerate(value):
+                name2 = name + f'[{jj}]'
+                df[name2] = v
+                
+        elif issubclass(dict, type(value)):
+            for key, v in value.items():
+                name2 = name + f"['{key}']"
+                df[name2] = v            
+        else:
+            df[name] = value
+        return df
 
     
 def to_sql(connection, data: dict,
@@ -634,9 +683,27 @@ def to_sql(connection, data: dict,
             df = data[name]
             table_name = symbol_prefix + name
             client.save_dataframe(df, table_name)
-            
-        
 
+            
+def to_parquet(directory, data: dict, 
+           symbol_prefix='symbol-',
+           symbol_table='good-symbol-list'):
+    client = ParquetClient(directory)
+    names = data.keys()
+    df = pd.Series(names, name='symbol').to_frame()
+    client.save_dataframe(df, symbol_table)
+    for name in names:
+        df = data[name]
+        table_name = symbol_prefix + name
+        
+        try:
+            client.save_dataframe(df, table_name)
+            
+        # Convert pd.Series to pd.DataFrame if needed. 
+        except AttributeError:
+            df = pd.DataFrame(df)
+            client.save_dataframe(df, table_name)
+    
     
 
 

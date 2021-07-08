@@ -22,7 +22,7 @@ from backtester.exceptions import (
     NoMoneyError, TradingError, NotEnoughDataError, BacktestError)
 
 from backtester.definitions import SMALL_DOLLARS, DF_ADJ_CLOSE
-from backtester.indicators import TrailingStats
+from backtester.indicators import TrailingStats, TrailingIntervals
 
 SMALL_TIME_SECONDS = 1
 
@@ -153,7 +153,7 @@ class Strategy(metaclass=ABCMeta):
                   func: Callable, 
                   *args,
                   name: str=None, 
-                  **kwargs) -> "_IndicatorValue":
+                  **kwargs) -> "IndicatorValue":
         """Create an indicator and return a `_IndicatorValue.
 
         Parameters
@@ -235,7 +235,13 @@ class IndicatorValue:
         key = next(iter(self.indicators.tables))
         table = self.indicators.tables[key]
         return table.columns
-        
+    
+    
+    def latest(self, symbol: str):
+        """Get latest value for the current Strategy date."""
+        table = self.indicators.tables[symbol]
+        date = self.strategy.date
+        return table.array_at(date)
     
     
     def __call__(self, symbol: str):
@@ -576,7 +582,7 @@ class BacktestStats:
     @lru_cache
     def mean_returns(self, window: int):
         series1 = self.performance[self.COLUMN_EQUITY]
-        r1 = TrailingStats(series1, window_size=window).return_ratio
+        r1 = TrailingIntervals(series1, window_size=window).return_ratio
         return r1
     
     
@@ -587,13 +593,13 @@ class BacktestStats:
         transactions = self._transactions
         st = SymbolTransactions(
             symbol, 
-            stock_data=transactions.stock_data,
-            commission=transactions.commission
+            stock_data = transactions.stock_data,
+            commission = transactions.commission,
             )   
         prices = st.get_prices(index.values)
         series2 = pd.Series(data=prices, index=index)
 
-        r2 = TrailingStats(series2, window_size=window).return_ratio
+        r2 = TrailingIntervals(series2, window_size=window).return_ratio
         return r2
     
     

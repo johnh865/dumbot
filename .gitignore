@@ -9,6 +9,8 @@
 *.pptx
 *.html
 *.sqlite3
+*.parquet
+*.parquet/
 
 # Ignore the following directories
 build/

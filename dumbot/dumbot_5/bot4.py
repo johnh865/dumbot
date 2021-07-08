@@ -237,18 +237,32 @@ class Strat1(Strategy):
         return
     
     
-    def get_stocks(self):
-        MAX_ALLOWED = 5
+    def get_stocks(self) -> set:
+        MAX_ALLOWED = 30
         metrics = [self.stats.get(stock, self.date) for stock in STOCKS]
         metrics = np.array(metrics)
-        isort = np.argsort(metrics)
+        isort = len(metrics) - np.argsort(metrics) - 1
         buy_indices1 = metrics > 0
-        buy_indices2 = isort <= MAX_ALLOWED
+        buy_indices2 = isort < MAX_ALLOWED
         buy_indices = buy_indices1 & buy_indices2
         
         new_stocks = STOCKS[buy_indices]
         return set(new_stocks)
-        
+    
+    
+    
+    def get_metrics(self) -> pd.Series:
+        metrics = [self.stats.get(stock, self.date) for stock in STOCKS]
+        # metrics = np.array(metrics)
+        metrics = pd.Series(metrics, index=STOCKS)
+        metrics = metrics.sort_values(ascending=False)
+        return metrics
+    
+    
+    def get_metrics_dict(self):
+        metrics = self.get_metrics()
+        return pd.Series(metrics, index=STOCKS)
+    
     
 if __name__ == '__main__':
 
@@ -256,8 +270,8 @@ if __name__ == '__main__':
         stock_data=yahoo, 
         strategy=Strat1, 
         cash=100, 
-        commission=.001,
-        start_date=datetime.datetime(2019, 1, 19),
+        commission=.000,
+        start_date=datetime.datetime(2006, 1, 19),
         end_date=datetime.datetime(2021, 6, 25),
         )
     bt.run()

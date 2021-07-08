@@ -4,7 +4,7 @@ import numpy as np
 
 from backtester.backtest import Strategy, Backtest
 from backtester.stockdata import YahooData, Indicators
-from backtester.indicators import TrailingStats
+from backtester.indicators import TrailingStats, append_nan
 from backtester.exceptions import NoMoneyError
 from backtester.definitions import DF_ADJ_CLOSE
 from datetime import datetime
@@ -16,19 +16,21 @@ yahoo = YahooData(['DIS', 'FNILX', 'GOOG', 'VOO'])
 def rolling_avg(df, window: int):
     ts = TrailingStats(df[DF_ADJ_CLOSE], window)
     
-    out = ts.rolling_avg
+    out = ts.mean
     out[np.isnan(out)] = 0
-    return out
+    return append_nan(out, window)
     
 
 def my_indicators(df, window: int):
     ts = TrailingStats(df[DF_ADJ_CLOSE], window)
-    i1 = ts.rolling_avg
+    i1 = ts.mean
     i2 = ts.exp_growth
     
     i1[np.isnan(i1)] = 0
     i2[np.isnan(i2)] = 0
     
+    i1 = append_nan(i1, window)
+    i2 = append_nan(i2, window)
     return i1, i2
 
 
@@ -82,7 +84,7 @@ class MyStrat(Strategy):
         if crossover(sma1, sma2):
             t = self.sell_percent(symbol2, 1.0)
             print(t)
-            t = self.buy(symbol, self.available_funds)
+            t = self.buy(symbol, self.state.available_funds)
             print(t)
 
         # Else, if sma1 crosses below sma2, close any existing
@@ -90,7 +92,7 @@ class MyStrat(Strategy):
         elif crossover(sma2, sma1):
             t = self.sell_percent(symbol, 1.0)
             print(t)
-            t = self.buy(symbol2, self.available_funds)
+            t = self.buy(symbol2, self.state.available_funds)
             print(t)
             
         # print('assets', self.asset_values)

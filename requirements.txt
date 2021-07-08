@@ -4,7 +4,6 @@ yfinance
 pandas
 pytrends
 matplotlib
-sqlalchemy
 scipy
 backtesting
 pytest
@@ -12,6 +11,12 @@ numba
 spyder
 bs4
 python-dotenv
+
+
+# Database
+pyarrow
+sqlalchemy
+
 
 # Machine learning stuff
 sklearn

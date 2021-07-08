@@ -14,12 +14,12 @@ from backtester.definitions import DF_ADJ_CLOSE
 from backtester.stockdata import YahooData, TableData, Indicators
 
 from backtester.exceptions import NotEnoughDataError
-from datasets.periodic_stats.build import ROIStats
+# from datasets.periodic_stats import read_rolling_stats
 from backtester.utils import InterpConstAfter
 
 from functools import cached_property
 import datetime
-
+import globalcache
 
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
@@ -31,55 +31,25 @@ load_dotenv()
 
 yahoo = YahooData()
 symbols = yahoo.symbol_names
+cache = globalcache.Cache(globals())
+
 # rs = np.random.default_rng(0)
 # rs.shuffle(symbols)
 
 
 
 
-class RollingStats:
-    """Retreive Sharpe or Sortino ratios."""
-    def __init__(self):
-        self.stats = ROIStats(36).read()
-
-        # self.df = stats_dict['sharpe']
-        self._interp_dict = {}   
-    
-    
-    def get(self, symbol: str, date: np.datetime64):
-        # series = self.df[symbol]
-        try:
-            series = self.stats.dataframes[symbol]['sharpe']
-        except KeyError:
-            return -1.0
-        
-        try:
-            interp = self._interp_dict[symbol]
-        except KeyError:
-            interp = InterpConstAfter(series.index, series.values, before=-1)
-            self._interp_dict[symbol] = interp
-            
-            
-        out = interp.scalar(date)
-        if np.isnan(out):
-            out = -1
-        return out
-
-
-        
-def stop_loss(df: pd.DataFrame):
+def post1(df:pd.DataFrame):
     series = df[DF_ADJ_CLOSE]
-    ts = TrailingStats(series, window_size=200)
-    loss = ts.max_loss
-    gain = ts.max_gain
-    delta = gain - loss
-    delta = append_nan(delta, ts.window_size)
-    return delta
+    window = 252*5
+    ts = TrailingStats(series, window)
+    stat1 = ts.exp_growth
+    if len(stat1) == 0:
+        out = np.zeros(len(series))
+        out[:] = np.nan
+        return out
+    return append_nan(stat1, window)
 
-
-indicator_stoploss = Indicators(yahoo)
-indicator_stoploss.create(stop_loss)
-table_stoploss = indicator_stoploss.tables['SPY']
 
 
 
@@ -88,11 +58,21 @@ STOCKS = symbols
 # STOCKS.append('VOO')
 # STOCKS.append('GOOG')
 # STOCKS.append('TSLA')
-STOCKS = np.array(STOCKS)
-# rng = np.random.default_rng(1)
-# rng.shuffle(STOCKS)
-# STOCKS = STOCKS[0:200]
+# STOCKS = np.array(STOCKS)[0:00]
+rng = np.random.default_rng(1)
+rng.shuffle(STOCKS)
+STOCKS = STOCKS[0:200]
 
+@cache.decorate
+def create_indicator():
+    yahoo.symbols = STOCKS
+    indicator = Indicators(yahoo)
+    indicator.create(post1)
+    for key in indicator.dataframes.keys():
+        indicator.dataframes[key]
+
+indicator = create_indicator()
+indicator.
 
 
 # %% Strategies
@@ -120,7 +100,8 @@ class Strat1(Strategy):
 
         # Arbitrarily set initial stock. Doesn't matter. 
         self.current_stocks = set()
-        self.stats = RollingStats()
+        # self.stats = RollingStats()
+        self.indicator1 = self.indicator(post1, )
         self.ii = 0
         self.loss_days = 0        
         return
@@ -238,14 +219,19 @@ class Strat1(Strategy):
     
     
     def get_stocks(self):
-        MAX_ALLOWED = 5
-        metrics = [self.stats.get(stock, self.date) for stock in STOCKS]
-        metrics = np.array(metrics)
+        MAX_ALLOWED = 6
+        metric_spy = self.indicator1.array('SPY')[-1, -1]
+        metrics = [self.indicator1.array(stock)[-1, -1] for stock in STOCKS]
+        metrics = np.array(metrics) - metric_spy
+        
+        
+        # metrics = [self.stats.get(stock, self.date) for stock in STOCKS]
         isort = np.argsort(metrics)
         buy_indices1 = metrics > 0
         buy_indices2 = isort <= MAX_ALLOWED
         buy_indices = buy_indices1 & buy_indices2
         
+        pdb.set_trace()
         new_stocks = STOCKS[buy_indices]
         return set(new_stocks)
         
@@ -256,8 +242,8 @@ if __name__ == '__main__':
         stock_data=yahoo, 
         strategy=Strat1, 
         cash=100, 
-        commission=.001,
-        start_date=datetime.datetime(2019, 1, 19),
+        commission=.002,
+        start_date=datetime.datetime(2018, 6, 19),
         end_date=datetime.datetime(2021, 6, 25),
         )
     bt.run()
