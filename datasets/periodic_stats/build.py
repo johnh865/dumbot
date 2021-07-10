@@ -314,6 +314,6 @@ def build_roi():
 if __name__ == '__main__':
     # y = YahooData(['SPY', 'GOOG'])
     roi = ROI()
-    r = ROIStats(60)
+    r = ROIStats(36)
     r.save()
     r.read()

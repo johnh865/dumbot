@@ -17,7 +17,7 @@ def test1():
     actions = [0, 1, 0, 1, 1, 0, 1]
     for action in actions:
         output = env.step(action)
-        print(env.backtest.strategy.state.asset_net)
+        print(env.backtest.strategy.state.equity)
         out.append(output)
         reward = output[1]
         rewards.append(reward)

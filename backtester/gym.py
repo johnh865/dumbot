@@ -13,7 +13,7 @@ from backtester.backtest import Backtest, Strategy
 from numpy.random import default_rng, Generator
 from typing import NamedTuple
 from backtester.definitions import DF_ADJ_CLOSE
-from backtester.indicators import TrailingStats
+from backtester.indicators import TrailingStats, append_nan
 
 class EnvStrategy(Strategy):
     """Simple strategy to interface with reinforcement Q-learning with 
@@ -153,7 +153,7 @@ class EnvBase:
     
     
     def _calc_assets(self):
-        return self.backtest.strategy.state.asset_net
+        return self.backtest.strategy.state.equity
         
         
     def _observe(self):
@@ -219,7 +219,7 @@ def env_sin20_growth():
         for window in windows:
             ts = TrailingStats(close, window)
             out = ts.exp_growth
-            
+            out = append_nan(out, window)
             # Replace NAN with 0
             out[np.isnan(out)] = 0
             outs[f'{window}'] = out
@@ -238,6 +238,7 @@ def env_sin20_growth():
 
 
 def env_noise(seed=0):
+    
     def indicator1(df):
         close = df['Close']
         windows = [20, 50, 100]
@@ -245,10 +246,12 @@ def env_noise(seed=0):
         for window in windows:
             ts = TrailingStats(close, window)
             out = ts.exp_growth
+            out = append_nan(out, window)
             out[np.isnan(out)] = 0
             outs[f'growth({window})'] = out
             
             out = ts.exp_reg_diff
+            out = append_nan(out, window)
             out[np.isnan(out)] = 0
             outs[f'diff({window})'] = out
         return outs
@@ -274,10 +277,12 @@ def env_spy(seed=0):
         for window in windows:
             ts = TrailingStats(close, window)
             out = ts.exp_growth
+            out = append_nan(out, window)
             out[np.isnan(out)] = 0
             outs[f'growth({window})'] = out
             
             out = ts.exp_reg_diff
+            out = append_nan(out, window)
             out[np.isnan(out)] = 0
             outs[f'diff({window})'] = out
         return outs

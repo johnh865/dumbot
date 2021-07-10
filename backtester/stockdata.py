@@ -318,9 +318,12 @@ class BaseData(metaclass=ABCMeta):
         for symbol in symbols:
             try:
                 table = self.tables[symbol]
-                series = table.dataframe[column]
-                series.name = symbol
-                new.append(series)
+                try:
+                    series = table.dataframe[column]
+                    series.name = symbol
+                    new.append(series)
+                except KeyError:
+                    pass
             except NotEnoughDataError:
                 pass
             
@@ -601,13 +604,13 @@ class Indicators(BaseData):
         # df_len = len(df.index)
         df2 = None
         
-        def check_len(value, name_):
-            vlen = len(value)
-            if vlen != df_len:
-                raise ValueError(
-                    f'Indicator {name_} length {vlen} does not match '
-                    f'stock_data length {df_len} for current increment '
-                    f'for symbol {symbol}.')    
+        # def check_len(value, name_):
+        #     vlen = len(value)
+        #     if vlen != df_len:
+        #         raise ValueError(
+        #             f'Indicator {name_} length {vlen} does not match '
+        #             f'stock_data length {df_len} for current increment '
+        #             f'for symbol {symbol}.')    
         
                    
         for name, idata in self._indicators.items():
@@ -623,6 +626,7 @@ class Indicators(BaseData):
             except ValueError as exception:
                 s = str(exception)
                 s += f', symbol={symbol}, column={name}'
+                s += f', for function {func}'
                 raise ValueError(s)
             # df_len = 
             
@@ -644,8 +648,15 @@ class Indicators(BaseData):
                              name: str,
                              symbol: str):
         if df is None:
-            if hasattr(value, 'index'):
+            
+            # Use index of value if Pandas index can be found.
+            if (
+                isinstance(value, pd.DataFrame) or 
+                isinstance(value, pd.Series)
+                ):
                 df = pd.DataFrame(index=value.index)
+            
+            # Use index of original dataframes otherwise
             else:
                 key = next(iter(self.stock_data.dataframes))
                 df0 = self.stock_data.dataframes[symbol]

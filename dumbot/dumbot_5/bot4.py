@@ -271,7 +271,7 @@ if __name__ == '__main__':
         strategy=Strat1, 
         cash=100, 
         commission=.000,
-        start_date=datetime.datetime(2006, 1, 19),
+        start_date=datetime.datetime(2021, 1, 19),
         end_date=datetime.datetime(2021, 6, 25),
         )
     bt.run()

@@ -26,11 +26,12 @@ def my_indicators(df, window: int):
     i1 = ts.mean
     i2 = ts.exp_growth
     
+    i1 = append_nan(i1, window)
+    i2 = append_nan(i2, window)    
+    
     i1[np.isnan(i1)] = 0
     i2[np.isnan(i2)] = 0
     
-    i1 = append_nan(i1, window)
-    i2 = append_nan(i2, window)
     return i1, i2
 
 
@@ -57,7 +58,7 @@ class MyStrategy(Strategy):
         
         if self.days_since_start % 30 == 0:
             try:
-                print(f'Available cash {self.available_funds:.2f}')
+                print(f'Available cash {self.state.available_funds:.2f}')
                 b = self.buy('DIS', 250.0)
                 print(b)
             except NoMoneyError:
@@ -148,7 +149,7 @@ def test_buy_hold():
                 self.is_first = False
                 
                 num = len(symbols)
-                portion = self.available_funds / num
+                portion = self.state.available_funds / num
                 for symbol in symbols:
                     self.buy(symbol, portion)
             
@@ -181,9 +182,9 @@ def test_buy_hold():
 
 
 if __name__ == '__main__':
-    # test1()
+    test1()
     test2()
-    # df = test_buy_hold()
+    df = test_buy_hold()
     
     
     

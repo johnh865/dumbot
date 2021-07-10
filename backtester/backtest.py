@@ -52,8 +52,9 @@ class Strategy(metaclass=ABCMeta):
         
     @abstractmethod
     def init(self):
-        """Definite your indicators here."""
+        """Define initialization here."""
         raise NotImplementedError('This method needs to be implemented by user')
+    
     
     @abstractmethod
     def next(self):
@@ -75,10 +76,12 @@ class Strategy(metaclass=ABCMeta):
         self._days_since_start = days_since_start
         self.state = TransactionsLastState(self._transactions, date)
         self.market_state = MarketState(self._transactions, date)
+        self.current_actions = []
 
         
     def _update_state(self):
         self.state = TransactionsLastState(self._transactions, self.date)
+        
         return
     
     
@@ -97,6 +100,7 @@ class Strategy(metaclass=ABCMeta):
         trade = self._transactions.buy(
             date=self._date, symbol=symbol, amount=amount)
         self._update_state()
+        self.current_actions.append(trade)
         
         return trade
         
@@ -111,6 +115,7 @@ class Strategy(metaclass=ABCMeta):
         trade =  self._transactions.sell(
             date=self._date, symbol=symbol, amount=amount)
         self._update_state()
+        self.current_actions.append(trade)
         return trade
         
         
@@ -120,7 +125,7 @@ class Strategy(metaclass=ABCMeta):
         trade = self._transactions.sell_percent(
             date=self._date, symbol=symbol, amount=amount)
         self._update_state()
-        
+        self.current_actions.append(trade)
         return trade
 
 
@@ -146,7 +151,13 @@ class Strategy(metaclass=ABCMeta):
             warnings.warn(
                 f'The following stocks have been delisted for {self.date}: '
                 f'{symbols}')
-        return symbols        
+        return symbols  
+
+        
+    def dataset(self, data: BaseData):
+        """Register a dataset."""
+        self._indicators.append(data)
+        return IndicatorValue(indicators=data, strategy=self)
 
     
     def indicator(self,
@@ -204,7 +215,13 @@ class Strategy(metaclass=ABCMeta):
         indicators = self._indicators
         for indicator in indicators:
             indicator.set_stock_data(stock_data)
-
+            
+            
+    @property
+    def days_since_start(self):
+        """Days since the beginning of simulation for the current simulation increment."""
+        return self._days_since_start
+    
 
 class IndicatorValue:
     """Store reference to indicator, retrieve the indicator data for 

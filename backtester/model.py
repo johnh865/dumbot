@@ -348,7 +348,7 @@ class SymbolTransactions:
     
     
     def last_return_ratio(self, date: np.datetime64) -> float:
-        """Calculate ratio of return price since buy from zero shares."""
+        """Calculate ratio of return price since last buy from zero shares."""
         df = self.dataframe
         shares = df['shares'].values
         prices = df['price'].values
@@ -799,10 +799,19 @@ class Transactions:
         #     last_equity = self.last_executed_balance.equity
         # except IndexError:
         #     last_equity = self.init_funds
+        # TODO THIS FUNCTION IS BROKEN!!
+        # raise NotImplementedError('THIS FUNCTION IS BROKEN!!')
         
         balance : AccountBalance
         balance = self.balances[-1]
         action = self.executed_actions[-1]
+        
+        try:
+            last_balance = self.balances[-2]
+            last_equity = last_balance.equity
+        except IndexError:
+            pass
+        
         
         sdict = self._get_symbol_transactions_dict()
         symbol = action.symbol
@@ -962,6 +971,7 @@ class Transactions:
 
 
 class TransactionsLastState:
+    """Get state for a date after the last transaction."""
     def __init__(self, transactions: Transactions, date: np.datetime64):
         self._transactions = transactions
         self._stock_data = transactions.stock_data

@@ -128,10 +128,31 @@ def test_equity():
     return
         
 
+def test_equity2():
+    yahoo = YahooData()
+    symbols = ['SPY', 'GOOG', 'TSLA', 'AAPL',]
+    dates = yahoo.get_trade_dates()
+    
+    date1 = np.datetime64('2016-01-01')
+    dates = dates[dates > date1][0:5]
+    
+    transactions = Transactions(stock_data=yahoo, init_funds=100)
+    for ii, date in enumerate(dates):
+        if ii % 2 == 0:
+            for symbol in symbols:
+                transactions.buy(date, symbol, 10)
+        else:
+            for symbol in symbols:
+                transactions.sell_percent(date, symbol, 1)
+                
+    df = transactions.dataframe
+    pdb.set_trace()
+    
     
 
 if __name__ == '__main__':
     # test_transations()
     # test_interday()
     # test_equity()
-    test_shares()
+    test_equity2()
+    # test_shares()
