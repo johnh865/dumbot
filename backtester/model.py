@@ -33,7 +33,8 @@ from backtester.exceptions import DataError
 
 @dataclasses.dataclass
 class Action:
-    """
+    """State immediately **after** performance of an action. 
+    
     Parameters
     ----------
     date : datetime.datetime
@@ -64,7 +65,6 @@ class Action:
     fee : float = 0.0
     gain : float = 0.0
     price : float = None
-    
     
     def __post_init__(self):
         self.date = np.datetime64(self.date)
@@ -416,6 +416,9 @@ class SymbolTransactions:
         """Retrieve share value for a specific action index."""
         action = self.executed_actions[ii]
         shares =  action.shares
+        if shares == 0:
+            return 0.0
+        
         date = action.date
         date = floor_to_date(date)
         try:
@@ -493,6 +496,7 @@ class SymbolTransactions:
     
     
     def _check_dates(self, action: Action):
+        """Error check to make sure date is allowed."""
         date = action.date
         try:
             last_date= self.executed_actions[-1].date
@@ -503,6 +507,15 @@ class SymbolTransactions:
             s = (f'Transaction at {date} is not allowed on equal or before'
                  f' the last action at {last_date}.')
             raise TradingError(s)
+            
+        
+        # Check to make sure date is in the data index. 
+        date1 = np.datetime64(date, 'D')  
+        dates = self.df.index.values
+        loc = np.searchsorted(dates, date1)
+        
+        if dates[loc] != date1:
+            raise TradingError(f'{date} is not a valid trading day.')
         
     
     def _execute_one(self):
@@ -638,6 +651,10 @@ class Transactions:
         self.executed_actions = []
         self.balances = []
         self.price_name = price_name
+        
+        # Keep track of active stocks for latest action
+        self._latest_portfolio = set()
+        
         # self.stats = TransactionStats(self)
         
         if actions is None:
@@ -704,12 +721,29 @@ class Transactions:
             # Execute using add.
             st.add(action)
         return  
-                
+    
+    
+    def _check_action_timestamp(self, action: Action):
+        """Make sure new action is newer than previous actions."""
+        try:
+            last_action = self.executed_actions[-1]
+        except IndexError:
+            return
+        
+        last_date = last_action.date
+        if action.date <= last_date:
+            s = (f'Date for {action} '
+                 f'must be newer than last action at {last_date}.')
+            raise TradingError(s)
                     
+            
     def _execute_one(self):
         action = self.queue.popleft()
         name = action.name
         date = action.date
+        
+        # Check to make sure action has unique timestamp.
+        self._check_action_timestamp(action)
 
         try:
             last_balance: AccountBalance = self.balances[-1]
@@ -717,12 +751,11 @@ class Transactions:
             available_funds = self.init_funds
         else:
             available_funds = last_balance.available_funds
-        
+
         if name == ACTION_BUY:
             if available_funds - action.amount + SMALL_DOLLARS < 0:
                 action.amount = 0 
                 raise NoMoneyError(f'Available funds is less than 0 from {action}!')
-            
 
         self._execute_symbol(action)
 
@@ -735,12 +768,17 @@ class Transactions:
             
         elif name == ACTION_BUY:
             available_funds += -action.amount
+            self._latest_portfolio.add(action.symbol)
             
         elif name == ACTION_SELL:
             available_funds += action.gain
+            if action.shares == 0:
+                self._latest_portfolio.remove(action.symbol)
             
         elif name == ACTION_SELL_PERCENT:
-            available_funds += action.gain              
+            available_funds += action.gain          
+            if action.shares == 0:
+                self._latest_portfolio.remove(action.symbol)
         
         elif name == ACTION_HOLD:
             pass
@@ -794,38 +832,21 @@ class Transactions:
     
     def _execute_last_equity(self):
         """Calculate equity (cash + assets) for the last transaction."""
-        # try:
-        #     last_executed_balance = self.balances[-2]
-        #     last_equity = self.last_executed_balance.equity
-        # except IndexError:
-        #     last_equity = self.init_funds
-        # TODO THIS FUNCTION IS BROKEN!!
-        # raise NotImplementedError('THIS FUNCTION IS BROKEN!!')
-        
         balance : AccountBalance
         balance = self.balances[-1]
-        action = self.executed_actions[-1]
         
-        try:
-            last_balance = self.balances[-2]
-            last_equity = last_balance.equity
-        except IndexError:
-            pass
-        
+        equity = balance.available_funds
         
         sdict = self._get_symbol_transactions_dict()
-        symbol = action.symbol
-        if symbol is not None:
-            s_transaction = sdict[action.symbol]        
-            values = s_transaction.get_share_valuation_for_action(-1)
-        else:
-            values = 0
-        equity = balance.available_funds
-        equity += values
+        portfolio = self._latest_portfolio
+        
+        for symbol in portfolio:
+            s_transaction = sdict[symbol]
+            value = s_transaction.get_share_valuation(balance.date)
+            equity += value
         
         balance.equity = equity
         return
-        
         
         
     def _execute_equity(self):
@@ -837,10 +858,9 @@ class Transactions:
         dates = np.array([a.date for a in actions])
         equity = np.array([b.available_funds for b in balances])
         
-        
         for s_transaction in sdict.values():
             values = s_transaction.get_share_valuations(dates)
-            equity = equity + values
+            equity += values
 
         for ii, balance in enumerate(balances):
             balance.equity = equity[ii]

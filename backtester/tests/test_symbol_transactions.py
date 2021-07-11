@@ -216,15 +216,38 @@ def test_return_ratio():
 
     
     
+def test_share_valuation():
+    symbol = 'SPY'
+    yahoo = YahooData()
+    
+    date = np.datetime64('2016-01-04')
+    small = np.timedelta64(1, 'ms')
     
     
+    st = SymbolTransactions(symbol, yahoo)
+    dates = []
+    for ii in range(10):
+        dates.append(date)
+        if ii % 2 == 0:
+            action = Action(date, ACTION_BUY, amount=10, symbol=symbol)
+        else:
+            action = Action(date, ACTION_SELL, amount=10, symbol=symbol)
+        st.add(action)
+        date += small
+        
+        
+    dates = np.array(dates)
+    values1 = st.get_share_valuations(dates)
+    values2 = [st.get_share_valuation_for_action(ii) for ii in range(10)]
+    values2 = np.array(values2)
+    assert np.all(values1 == values2)
     
-
     
 if __name__ == '__main__':
-    # test_3()
-    # test_last_trading_date()
-    # test_last_trading_date2()
-    # test_exec_one()
-    # test_interday()
+    test_3()
+    test_last_trading_date()
+    test_last_trading_date2()
+    test_exec_one()
+    test_interday()
+    test_share_valuation()
     test_return_ratio()

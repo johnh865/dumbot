@@ -59,9 +59,7 @@ def test_transations():
     return
 
 def test_interday():
-    
-    
-        
+
     date1 = datetime.datetime(2017, 1, 5)
     date2 = datetime.datetime(2017, 1, 20, 0, 1)
     date3 = datetime.datetime(2017, 1, 20, 0, 2)
@@ -135,24 +133,65 @@ def test_equity2():
     
     date1 = np.datetime64('2016-01-01')
     dates = dates[dates > date1][0:5]
+    small = np.timedelta64(1, 'ms')
     
     transactions = Transactions(stock_data=yahoo, init_funds=100)
     for ii, date in enumerate(dates):
+        # Buy
         if ii % 2 == 0:
             for symbol in symbols:
                 transactions.buy(date, symbol, 10)
+                date += small
         else:
             for symbol in symbols:
                 transactions.sell_percent(date, symbol, 1)
+                date += small
                 
-    df = transactions.dataframe
-    pdb.set_trace()
+    df1 = transactions.dataframe
+    # pdb.set_trace()
+    del transactions.dataframe
+    transactions._execute_equity()
+    df2 = transactions.dataframe
     
+    
+    def check_column(name):
+        try:
+            assert np.all(np.isclose(df1[name], df1[name]))
+        except TypeError:
+            assert np.all(df1[name] == df2[name])
+    for column in df1.columns:
+        check_column(column)
+    
+    
+def test_equity3():
+    yahoo = YahooData()
+    symbols = ['SPY', 'GOOG', 'TSLA', 'AAPL',]
+    
+    date = np.datetime64('2016-01-04')
+    small = np.timedelta64(1, 'ms')
+
+    transactions = Transactions(stock_data=yahoo, 
+                                commission=0.0,
+                                init_funds=100)
+    for ii in range(10):
+        if ii % 2 == 0:
+            for symbol in symbols:
+                transactions.buy(date, symbol, 10)
+                date += small
+        else:
+            for symbol in symbols:
+                transactions.sell_percent(date, symbol, 1)
+                date += small
+                
+    df1 = transactions.dataframe
+    assert np.all(df1['equity'] == 100)
     
 
+
+
 if __name__ == '__main__':
-    # test_transations()
-    # test_interday()
-    # test_equity()
+    test_transations()
+    test_interday()
+    test_equity()
     test_equity2()
-    # test_shares()
+    test_equity3()
