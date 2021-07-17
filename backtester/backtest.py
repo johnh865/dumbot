@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pdb
-
+from typing import Union, Hashable
 import datetime
 from abc import abstractmethod, ABCMeta
 from typing import Callable 
@@ -17,7 +17,7 @@ from backtester.model import TransactionsLastState, MarketState
 
 from backtester.utils import delete_attr, dates2days, get_trading_days
 from backtester.utils import interp_const_after
-from backtester.stockdata import BaseData, Indicators
+from backtester.stockdata import BaseData, Indicators, TableData, DictData
 from backtester.exceptions import (
     NoMoneyError, TradingError, NotEnoughDataError, BacktestError)
 
@@ -41,7 +41,9 @@ class Strategy(metaclass=ABCMeta):
     
     def __init__(self, transactions: Transactions):
         self._transactions = transactions
-        self._indicators = [] 
+        self.indicators = IndicatorManager(self)
+        return
+    
         
         
     # def _set_indicators(self, indicators: Indicators=None):
@@ -158,9 +160,10 @@ class Strategy(metaclass=ABCMeta):
         """Register a dataset."""
         self._indicators.append(data)
         return IndicatorValue(indicators=data, strategy=self)
+    
 
     
-    def indicator(self,
+    def __notused__indicator(self,
                   func: Callable, 
                   *args,
                   name: str=None, 
@@ -210,7 +213,7 @@ class Strategy(metaclass=ABCMeta):
         return IndicatorValue(indicators=indicator, strategy=self)
     
     
-    def set_indicator_data(self, stock_data: BaseData):
+    def __notused__set_indicator_data(self, stock_data: BaseData):
         """Use to set stock data used for indicator calculation."""
         indicators = self._indicators
         for indicator in indicators:
@@ -222,6 +225,188 @@ class Strategy(metaclass=ABCMeta):
         """Days since the beginning of simulation for the current simulation increment."""
         return self._days_since_start
     
+
+class IndicatorManager:
+    """Create and retrieve indicator data."""
+    def __init__(self, strategy: Strategy):
+        self.strategy = strategy
+        self.data_sources = {}
+    
+    
+    def from_basedata(self, d: BaseData, key: str):
+        """Create from a dictionary of dataframes
+        
+        Parameters
+        ----------
+        d : dict[pandas.DataFrame] or BaseData
+            dict of dataframes with date index and indicator columns.
+        """
+        d = IndicatorBaseData(d, self.strategy)
+        self.data_sources[key] = d
+        
+    
+    def from_dataframe_dict(self, d: dict[pd.DataFrame], key: str):
+        d = DictData(d)
+        return self.from_basedata(d, key)
+        
+        
+    def from_dataframe(self, d: pd.DataFrame, key: str):
+        """Create from a DataFrame of date index and column symbols.
+        
+        Parameters
+        ----------
+        d : pandas.DataFrame
+            Dataframe of date index an column symbols
+        """
+        d = IndicatorDataFrame(d, name=key, strategy=self.strategy)
+        self.data_sources[key] = d
+        
+    
+    def from_func(self, func: Callable, *args, key: str, **kwargs):
+        indicator = Indicators()
+        stock_data = self.strategy._transactions.stock_data
+        indicator.set_stock_data(stock_data)
+        
+        name = indicator.create(func, *args, name=key, **kwargs)
+        d = IndicatorBaseData(indicator, self.strategy)
+        self.data_sources[key] = d
+        
+        
+    def keys(self):
+        return list(self.data_sources.keys())
+    
+    
+    def __getitem__(self, key: str):
+        return self.data_sources[key]
+    
+    
+    def ____old_get_latest(self, date: np.datetime64=None) -> pd.DataFrame:
+        """Get all indicators for latest time."""
+        series_dict = {}
+        source : IndicatorBaseData
+        for key in self.data_sources:
+            source = self.data_sources[key]
+            try: 
+                series = source()
+                series_dict[key] = series
+
+            except TypeError:
+                columns = source.columns
+                if len(columns) == 1:
+                    series = source[columns[0]]
+                    series_dict[key] = series
+                else:
+                    for column in columns:
+                        series = source[column]
+                        newname = key + '.' + column
+                        series_dict[newname] = series
+        df = pd.DataFrame.from_dict(series_dict, orient='index')
+        return df
+    
+    
+    def get_latest(self, date: np.datetime64=None) -> pd.DataFrame:
+        series_dict = {}
+        for key in self.data_sources:
+            source = self.data_sources[key]
+            data = source()
+
+                
+            if hasattr(data, 'columns'):
+                columns = data.columns
+                cnum = len(columns)
+                if cnum == 1:
+                    series_dict[key] = data[columns[0]]
+                else:
+                    for column in columns:
+                        name = key + '.' + column
+                        series_dict[name] = data[column]
+            else:    
+                series_dict[key] = data
+            
+        df = pd.DataFrame.from_dict(series_dict, orient='index')
+        return df
+    
+    
+    def __call__(self, date: np.datetime64=None) -> pd.DataFrame:
+        return self.get_latest(date)
+                    
+    
+class IndicatorBaseData:
+    """Indicator dataframe-dict interface to strategy."""
+    def __init__(self, basedata: BaseData, strategy: Strategy):
+        self.basedata = basedata
+        tables = {}
+        for column in self.columns:
+            df = basedata.extract_column(column)
+            tables[column] = TableData(df)
+        self.tables = tables
+        self.strategy = strategy
+        
+        
+    @cached_property
+    def columns(self):
+        key = next(iter(self.basedata.tables))
+        table = self.basedata.tables[key]
+        return table.columns
+    
+
+    
+    def _series(self, column: str, date: np.datetime64=None) -> pd.Series:
+        if date is None:
+            date = self.strategy.date
+        return self.tables[column].series_at(date)
+    
+    def latest(self, date: np.datetime64=None) -> pd.DataFrame:
+        d = {}
+        for column in self.columns:
+            d[column] = self._series(column, date)
+        return pd.DataFrame.from_dict(d)
+    
+    
+    def __call__(self, date: np.datetime64=None) -> pd.DataFrame:
+        return self.latest(date)
+    
+    
+    
+    def __getitem__(self, column: str) -> pd.Series:
+        """Retrieve data from specified column and date (latest if None)."""
+        return self.latest(column)
+        
+
+
+class IndicatorDataFrame:
+    """Indicator dataframe interface to strategy"""
+    def __init__(self, df: pd.DataFrame, name: str, strategy: Strategy):
+        self.table = TableData(df)
+        self.name = name
+        self.strategy = strategy
+        
+    
+    def latest(self, date: np.datetime64=None) -> pd.Series:
+        if date is None:
+            date = self.strategy.date
+        return self.table.series_at(date)
+    
+    
+    @cached_property
+    def columns(self):
+        """Names of data columns."""
+        return np.array([self.name])
+    
+    
+    def __call__(self, date: np.datetime64=None) -> pd.Series:
+        return self.latest(date)
+    
+    
+    def __getitem__(self, column: str) -> pd.Series:
+        """Retrieve data from specified column and date (latest if None)."""
+        if column == self.name:
+            return self.latest()
+        else:
+            s = f'Column {column} not available. Only column available is {self.name}.'
+            raise KeyError(s)
+        
+
 
 class IndicatorValue:
     """Store reference to indicator, retrieve the indicator data for 
@@ -484,7 +669,7 @@ class Backtest:
         
         self.strategy : Strategy
         self.strategy.init()
-        self.strategy.set_indicator_data(self.stock_data)
+        # self.strategy.set_indicator_data(self.stock_data)
         self.strategy._set_data(date, 0)
         
         self.transactions.reset()

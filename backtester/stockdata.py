@@ -28,6 +28,19 @@ TABLE_PREFIX = 'symbol-'
 SYMBOL_TABLE = 'good-symbol-list'
 
 
+class DataFrameStocks(pd.DataFrame):
+    """DataFrame with dates as index and stock symbol names as columns."""
+    pass
+
+
+class DataFrameStock(pd.DataFrame):
+    """DataFrame with dates as index and data for single stock as columns."""
+    pass
+
+
+
+
+
 class LazyMap(MutableMapping):
     """Lazy dictionary that applies a function only when the item is retrieved.
     
@@ -222,6 +235,12 @@ class TableData:
         ii = np.searchsorted(self.times, date)
         return self.values[ii]
     
+    
+    def series_at(self, date: np.datetime64):
+        ii = np.searchsorted(self.times, date)
+        return self.df.iloc[ii]
+    
+    
     # def dataframe_after(self, date: np.datetime64):
     #     ii = np.searchsorted(self.times, date)
     #     return self.df.iloc[ii :]    
@@ -308,7 +327,7 @@ class BaseData(metaclass=ABCMeta):
         return out
     
     
-    def extract_column(self, column: str) -> pd.DataFrame:
+    def extract_column(self, column: str) -> DataFrameStocks:
         """From all symbols retrieve the specified data column"""
         symbols = self.symbol_names
         symbol = symbols[0]

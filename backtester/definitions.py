@@ -33,3 +33,5 @@ ACTION_WITHDRAW = 'withdraw'
 ACTION_HOLD = 'hold'
 ACTION_SELL_PERCENT= 'sell_percent'
 
+
+TRADING_DAYS_PER_YEAR = 253 

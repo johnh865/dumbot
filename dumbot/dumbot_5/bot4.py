@@ -272,7 +272,7 @@ if __name__ == '__main__':
         cash=100, 
         commission=.000,
         start_date=datetime.datetime(2021, 1, 19),
-        end_date=datetime.datetime(2021, 6, 25),
+        end_date=datetime.datetime(2021, 2, 25),
         )
     bt.run()
     perf = bt.stats.performance

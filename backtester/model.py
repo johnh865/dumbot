@@ -595,46 +595,21 @@ class SymbolTransactions:
     
     @cached_property
     def dataframe(self) -> pd.DataFrame:
-        """Save actions and balances to dataframe."""
+        """Save actions and balances to dataframe. See `Action` for columns. 
+        
+        Returns
+        -------
+        out : pandas.DataFrame
+            - index -- dates associated with actions.        
+        """
     
         data1 = [b.to_series() for b in self.executed_actions]
         df1 = pd.DataFrame(data1)
         df1 = df1.set_index('date')
         return df1
     
-    
+        
 
-    # @cached_property
-    # def gain(self):
-    #     return sum(action.gain for action in self.executed_actions)
-        
-        
-    def hold_index(self):
-        
-        dates = self.df.index
-        bools_list = []
-        for action in self.executed_actions:
-            if action.name == ACTION_BUY:
-                date_start = action.date
-                
-            elif action.name == ACTION_SELL or action.name == ACTION_SELL_PERCENT:
-                date_end = action.date
-                bools = (dates >= date_start) & (dates <= date_end)
-                bools_list.append(bools)
-                
-        # Handle with action ending with buy
-        if action.name == ACTION_BUY:
-            date_end = self.df.index[-1]
-            bools = (dates >= date_start) & (dates <= date_end)
-            bools_list.append(bools)
-
-        bools2 = np.max(bools_list, axis=0)
-        
-        
-        ihold = self.df.iloc[bools2].index
-        # isell = self.df.iloc[~bools2].index
-        return ihold
-        
 
 class Transactions:
     """Store and process stock transactions."""
@@ -653,7 +628,7 @@ class Transactions:
         self.price_name = price_name
         
         # Keep track of active stocks for latest action
-        self._latest_portfolio = set()
+        self.latest_portfolio = set()
         
         # self.stats = TransactionStats(self)
         
@@ -768,17 +743,17 @@ class Transactions:
             
         elif name == ACTION_BUY:
             available_funds += -action.amount
-            self._latest_portfolio.add(action.symbol)
+            self.latest_portfolio.add(action.symbol)
             
         elif name == ACTION_SELL:
             available_funds += action.gain
             if action.shares == 0:
-                self._latest_portfolio.remove(action.symbol)
+                self.latest_portfolio.remove(action.symbol)
             
         elif name == ACTION_SELL_PERCENT:
             available_funds += action.gain          
             if action.shares == 0:
-                self._latest_portfolio.remove(action.symbol)
+                self.latest_portfolio.remove(action.symbol)
         
         elif name == ACTION_HOLD:
             pass
@@ -838,7 +813,7 @@ class Transactions:
         equity = balance.available_funds
         
         sdict = self._get_symbol_transactions_dict()
-        portfolio = self._latest_portfolio
+        portfolio = self.latest_portfolio
         
         for symbol in portfolio:
             s_transaction = sdict[symbol]
@@ -1017,6 +992,7 @@ class TransactionsLastState:
     
     @cached_property
     def current_stocks(self) -> pd.Series:
+        """Current stocks and their asset values."""
         return self.asset_values[self.asset_values.values > 0]
     
     
