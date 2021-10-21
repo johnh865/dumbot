@@ -47,6 +47,27 @@ def min_points(series: pd.Series, ptnum=200) -> bool:
     return len(values) < ptnum
     
 
+
+def is_clean_symbol(df: pd.DataFrame, name='') -> bool:
+    closes = df[DF_ADJ_CLOSE]
+        
+    if len(df) == 0:
+        print(name, 'has no data in it')
+    elif has_jumps(closes):
+        print(name, 'has data jumps.')
+    elif has_gaps(closes):
+        print(name, 'has gaps')
+    elif min_points(closes):
+        print(name, 'less than 200 points')
+    else:
+        print(name, '-- GOOD.')
+        return True
+    return False
+    
+
+
+
+
 def get_good_symbols() -> list[str]:
     """Retrieve symbols where I think it has 'good' data."""
     names = read_yahoo_symbol_names()

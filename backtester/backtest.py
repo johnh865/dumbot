@@ -26,6 +26,7 @@ from backtester.indicators import TrailingStats, TrailingIntervals
 
 SMALL_TIME_SECONDS = 1
 
+
 class Strategy(metaclass=ABCMeta):
     """Base class for creating trading strategies.
     Use by creating a new strategy class by inheriting this baseclass. 
@@ -156,10 +157,10 @@ class Strategy(metaclass=ABCMeta):
         return symbols  
 
         
-    def dataset(self, data: BaseData):
-        """Register a dataset."""
-        self._indicators.append(data)
-        return IndicatorValue(indicators=data, strategy=self)
+    # def dataset(self, data: BaseData):
+    #     """Register a dataset."""
+    #     self._indicators.append(data)
+    #     return IndicatorValue(indicators=data, strategy=self)
     
 
     

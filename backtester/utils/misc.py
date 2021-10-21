@@ -2,6 +2,8 @@
 from typing import Sequence
 from numbers import Number
 
+import os
+import importlib.util
 import numpy as np
 import pandas as pd
 from numba import njit, TypingError
@@ -217,4 +219,22 @@ def _interp_const_after_old2(x: np.ndarray,
         
     return y0
 
+
+
+
+def import_path(path: str, name=''):
+    """Import a module by its file path.
     
+    https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path?page=1&tab=active#tab-top
+    
+    """
+    if name == '':
+        name = os.path.basename(path)
+        name = os.path.splitext(name)[0]
+        
+    spec = importlib.util.spec_from_file_location(name, path)
+    foo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(foo)
+    return foo
+
+

@@ -10,6 +10,9 @@ from datasets import symbols
 from datasets.yahoo.definitions import CONNECTION_PATH, TABLE_SYMBOL_PREFIX
 from datasets.yahoo.read import read_yahoo_trade_dates
 from datasets.yahoo.build_trade_dates import save_trade_dates
+from backtester.stockdata import to_sql, to_parquet
+
+
 from backtester import utils
 
 SYMBOLS = symbols.ALL
@@ -51,7 +54,6 @@ def download_to_df_dict(symbols: list[str],
     new = {}
     assert dframes.columns.nlevels == 2
     
-    
     keys = dframes.columns.get_level_values(0)
     keys = np.unique(keys)
     for key in keys:
@@ -59,6 +61,7 @@ def download_to_df_dict(symbols: list[str],
         if df.size > 0:
             new[key] = df
     return new
+
 
 
 def update(symbols: list[str]):
@@ -110,6 +113,7 @@ def update(symbols: list[str]):
     
     
 if __name__ == '__main__':
+    pass
     # download(symbols.ALL)
-    update(symbols.ALL)
+    # update(symbols.ALL)
     # d = download_to_dfdict(symbols.ALL[0:10])

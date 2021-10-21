@@ -17,6 +17,9 @@ python-dotenv
 pyarrow
 sqlalchemy
 
+# Vis/Gui
+panel
+
 
 # Machine learning stuff
 sklearn

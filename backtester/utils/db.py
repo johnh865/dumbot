@@ -46,6 +46,13 @@ class ParquetClient:
         return
     
     
+    def table_exists(self, name: str) -> bool:
+        """Check if table exists"""
+        path = self.dir_path / name 
+        path = path.with_suffix(self.suffix)    
+        return path.is_file()
+    
+    
     def get_table_names(self):
         paths = self.dir_path.iterdir()
         stems = [p.stem for p in paths if p.suffix == self.suffix]

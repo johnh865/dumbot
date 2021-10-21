@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pdb
 from functools import cached_property
-
+import copy
 import numpy as np
 import pandas as pd
 
@@ -143,19 +143,42 @@ class StockSnapshot:
     holdings_name = 'holdings ($)'
     stock_name = '__stock_name__'
     
-    def __init__(self, strategy: Strategy):
+    def __init__(self, strategy: Strategy, symbols=None):
         self._state = strategy.state
         self._strategy = strategy
         
         indicators = strategy.indicators().T
+        stock_values = self._state.current_stocks
+        
+        if symbols is not None:
+            indicators = indicators.loc[symbols]
+            stock_values = stock_values[symbols]
+        
         column = indicators.columns[0]
         self.indicators = indicators.sort_values(by=column, ascending=False)
-        self.stock_values = self._state.current_stocks
-
-        
-        
+        self.stock_values = stock_values
         self.symbols = self.stock_values.keys()
+        
+  
+        
+        
+    def head(self, n: int=20):
+        symbols = self.indicators.index.values[0 : n]
+        return StockSnapshot(self._strategy, symbols=symbols)
+        
     
+    def tail(self, n: int=20):
+        symbols = self.indicators.index.values[-n : ]
+        return StockSnapshot(self._strategy, symbols=symbols)
+    
+    
+    def sample(self, n: int=20):
+        snum = len(self.symbols)
+        n = min(n, snum)
+        symbols = self.indicators.index.sample(n=n)
+        return StockSnapshot(self._strategy, symbols=symbols)
+    
+
         
     @cached_property
     def dataframe(self):

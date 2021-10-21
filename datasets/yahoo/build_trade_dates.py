@@ -50,7 +50,14 @@ def _build_trade_dates():
     return time_old
 
 
-def save_trade_dates():
+def trade_dates_dataframe():
+    times = _build_trade_dates()
+    series = pd.Series(times)
+    df = series.to_frame(DF_DATE)
+    return df
+    
+    
+def save_trade_dates_to_sql():
     """Save TABE_ALL_TRADE_DATES to database."""
     times = _build_trade_dates()
     series = pd.Series(times)
@@ -61,6 +68,5 @@ def save_trade_dates():
     
 
 if __name__ == '__main__':
-    times = save_trade_dates()
-        
+    pass        
             

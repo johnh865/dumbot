@@ -715,13 +715,19 @@ def to_sql(connection, data: dict,
             client.save_dataframe(df, table_name)
 
             
-def to_parquet(directory, data: dict, 
+def to_parquet(directory, data: dict[pd.DataFrame], 
            symbol_prefix='symbol-',
            symbol_table='good-symbol-list'):
+    """Save dict of DataFrames to a parquet directory."""
     client = ParquetClient(directory)
     names = data.keys()
     df = pd.Series(names, name='symbol').to_frame()
-    client.save_dataframe(df, symbol_table)
+    
+    if client.table_exists(symbol_table):
+        client.append_dataframe(df, symbol_table)
+    else:
+        client.save_dataframe(df, symbol_table)
+        
     for name in names:
         df = data[name]
         table_name = symbol_prefix + name
