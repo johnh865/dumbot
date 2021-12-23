@@ -7,7 +7,6 @@ import os
 import logging 
 
 
-from backtester.stockdata import ParquetData
 from backtester.utils import ParquetClient
 from datasets.yahoo.definitions import (
     DF_DATE,

@@ -8,5 +8,5 @@ from datasets.symbols import ALL as ALL_SYMBOLS
 
 
 
-y = YahooClient(PARQUET_PATH, ALL_SYMBOLS)
-y.update()
+yahoo_client = YahooClient(PARQUET_PATH, ALL_SYMBOLS)
+# y.update()

@@ -20,6 +20,11 @@ from datasets.yahoo import (
     read_yahoo_symbol_names,
     read_yahoo_trade_dates,
     )
+
+
+from datasets.yahoo2 import yahoo_client
+
+
 from backtester.exceptions import DataError, NotEnoughDataError
 from backtester.utils import SQLClient, ParquetClient
 
@@ -537,6 +542,31 @@ class YahooData(BaseData):
     
     def get_trade_dates(self):
         return read_yahoo_trade_dates()
+
+
+class YahooData2(BaseData):
+    def __init__(self, symbols=()):
+        if len(symbols) == 0:
+            
+            symbols = yahoo_client.get_symbols()
+        self.symbols = symbols
+        return
+    
+    
+    def retrieve(self, symbol: str):
+        return yahoo_client.read(symbol)
+    
+    
+    def retrieve_symbol_names(self):
+        return self.symbols
+    
+    
+    def get_trade_dates(self):
+        d = yahoo_client.trade_dates
+        d.update()
+        return d.get()
+
+
 
     
 def _get_indicator_name(func, args, kwargs):
