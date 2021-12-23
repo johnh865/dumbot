@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import pdb
 import os 
+import logging 
+
 
 from backtester.stockdata import ParquetData
 from backtester.utils import ParquetClient
@@ -19,6 +21,8 @@ import yfinance as yf
 from datasets.symbols import ALL as ALL_SYMBOLS
 from datasets.yahoo.clean import is_clean_symbol
 
+
+logger = logging.getLogger(__name__)
 
 def download_df_dict(
         symbols: list[str],
@@ -149,7 +153,7 @@ class YahooClient:
         self.client = ParquetClient(path)
         self._symbols_desired = symbols
         self.trade_dates = TradeDates(path)
-        self._names = self.client.get_table_names()
+        # self._names = self.client.get_table_names()
         self.symbols = self.get_symbols()
         
         
@@ -162,46 +166,70 @@ class YahooClient:
             if name.startswith('symbol-'):
                 symbols.append(name[7:])
         return symbols
-            
-        
-        
-    def init_data(self, start_date=None, end_date=None):
-
+    
+    
+    def add_symbols(self, symbols: list[str], start_date=None, end_date=None):
+        """Add a symbol to parquet data."""
         dict_i = download_df_dict(
-            
-            self._symbols_desired, 
+            symbols,
             start_date = start_date,
             end_date = end_date
-            
-            )  
+            )
         
         for symbol, df in dict_i.items():
             self.client.save_dataframe(df, 'symbol-' + symbol)
         self.symbols = list(dict_i.keys())
+            
+            
+            
+        
+        
+    def init_data(self, start_date=None, end_date=None):
+        symbols = self._symbols_desired
+        logger.info(
+            'Initializing data starting %s, ending %s',
+            start_date, 
+            end_date)
+        
+        return self.add_symbols(symbols, start_date, end_date)
         
             
         
     def read(self, symbol: str) -> pd.DataFrame:
         """Read stock dataframe."""
+        
         return self.client.read_dataframe('symbol-' + symbol)
     
     
     def update(self, end_date=None):
         # date = datetime.date.today()
+        if len(self.symbols) == 0:
+            self.init_data(end_date=end_date)
+            return
+        
         
         if 'SPY' in self.symbols:
             test_symbol = 'SPY'
         else:
             test_symbol = self.symbols[0]
         
-        date_last = self.read(test_symbol).index[-1]  
+        date_last = self.read(test_symbol).index[-1] 
+        today = datetime.date.today()
           
         date1 = date_last + pd.DateOffset(days=1)
         date1 = str(date1.date())        
+        
+        # Do not update if last detected date is already updated. 
+        if str(date_last.date()) == str(today):
+            return
+        
+        symbols = self.symbols
+        symbols.extend(self._symbols_desired)
+        symbols = set(symbols)
 
         dicti = download_df_dict(
             
-            self._symbols_desired, 
+            symbols,
             start_date = str(date1),
             end_date = end_date
             

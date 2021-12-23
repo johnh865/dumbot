@@ -270,9 +270,7 @@ def test1():
     closes = np.ones(100)*5
     closes[20:] = 10
     out = adjust_stock_splits(closes)
-    pdb.set_trace()
     
-test1()
     
     
     
