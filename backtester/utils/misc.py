@@ -220,8 +220,63 @@ def _interp_const_after_old2(x: np.ndarray,
     return y0
 
 
+import numba
+import pdb
+
+@numba.njit
+def adjust_stock_splits(closes: np.ndarray, rtol=.06):
+    """Detect stock splits and adjust closing price accordingly.
 
 
+    Parameters
+    ----------
+    closes : np.ndarray
+        Stock prices in ascending time order. .
+    rtol : float, optional
+        Split detection tolerance. The default is .06.
+
+    Returns
+    -------
+    new : ndarray
+        Adjusted stock prices.
+
+    """
+
+    clen = len(closes)    
+    new = closes.copy()
+    factor = 1.0
+    
+    possible_splits = [2, 3, 4, 5]
+    
+    for ii in range(clen - 1, 0, -1):
+        c2 = closes[ii]
+        c1 = closes[ii - 1]
+        ratio = c2 / c1
+        for split in possible_splits:
+            
+            error = abs(ratio - split) / split
+            if error < rtol:
+                factor = factor * split
+                break
+            
+            # if np.isclose(ratio, split, rtol=rtol):
+            #     factor = factor * split
+            #     break
+        new[ii - 1] = c1 * factor
+    return new
+
+    
+def test1():
+    closes = np.ones(100)*5
+    closes[20:] = 10
+    out = adjust_stock_splits(closes)
+    pdb.set_trace()
+    
+test1()
+    
+    
+    
+    
 def import_path(path: str, name=''):
     """Import a module by its file path.
     

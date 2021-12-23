@@ -18,7 +18,7 @@ ALL = set()
 for ii, line in enumerate(lines[1:]):
     date, tickers = line.split(sep=',', maxsplit=1)
     year, day, month = date.split('-')
-    print(ii, year)
+    # print(ii, year)
     if int(year) >= 2000: 
         tickers = tickers.strip()
         tickers = tickers.replace('"', '')

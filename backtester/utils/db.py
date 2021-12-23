@@ -2,6 +2,7 @@
 import pdb
 import pathlib
 import shutil
+import os
 
 import logging
 import sqlite3
@@ -14,23 +15,53 @@ from sqlalchemy import MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import inspect
 
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 
 def append_dataframes(df1: pd.DataFrame, df2: pd.DataFrame):
-    old_index = df1.index.values
-    new_index = df2.index.values
+    # old_index = df1.index.values
+    # new_index = df2.index.values
 
-    ii = np.searchsorted(old_index, new_index)
-    ii = np.minimum(ii, len(old_index) - 1)
+    # ii = np.searchsorted(old_index, new_index)
+    # ii = np.minimum(ii, len(old_index) - 1)
 
-    same_locs = new_index == old_index[ii]
-    diff_locs = ~same_locs
-    df_append = df2.iloc[diff_locs]    
-    df_new = pd.concat([df1, df_append])
+    # same_locs = new_index == old_index[ii]
+    # diff_locs = ~same_locs
+    # df_append = df2.iloc[diff_locs]    
+    # df_new = pd.concat([df1, df_append])
+    df_new = pd.concat([df1, df2])
     return df_new
 
 
+def append_to_parquet_table(dataframe, filepath=None, writer=None):
+    """Method writes/append dataframes in parquet format.
+
+    This method is used to write pandas DataFrame as pyarrow Table in 
+    parquet format. If the methods is invoked
+    with writer, it appends dataframe to the already written pyarrow table.
+
+    :param dataframe: pd.DataFrame to be written in parquet format.
+    :param filepath: target file location for parquet file.
+    :param writer: ParquetWriter object to write pyarrow tables in parquet format.
+    :return: ParquetWriter object. This can be passed in the subsequent
+    method calls to append DataFrame
+        in the pyarrow Table
         
+        
+    https://stackoverflow.com/questions/47113813/using-pyarrow-how-do-you-append-to-parquet-file
+    """
+    table = pa.Table.from_pandas(dataframe)
+    if writer is None:
+        writer = pq.ParquetWriter(filepath, table.schema)
+    writer.write_table(table=table)
+    return writer
+
+
+
 class ParquetClient:
+    """Construct and modify parquet data."""
+    
     suffix = '.parquet'
     
     def __init__(self, directory: str):
@@ -61,6 +92,9 @@ class ParquetClient:
     
     def save_dataframe(self, df: pd.DataFrame, name: str):
         path = self.dir_path / name
+        basedir = path.parent
+        os.makedirs(basedir, exist_ok=True)
+        
         path = path.with_suffix(self.suffix)
         df.to_parquet(str(path), )
 
@@ -77,7 +111,7 @@ class ParquetClient:
         """Append dataframe to database."""
         df_old = self.read_dataframe(name)
         df_new = append_dataframes(df_old, df)
-        self.save_dataframe(df, name)
+        self.save_dataframe(df_new, name)
         return df_new
     
     
