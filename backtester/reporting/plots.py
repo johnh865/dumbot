@@ -25,7 +25,6 @@ __all__ = ['barplot']
 
 TRADING_DAYS_PER_YEAR = 253 
 
-  
     
 def barplot(df: pd.DataFrame,
             x: str,

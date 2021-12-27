@@ -3,10 +3,21 @@ from functools import cached_property
 
 import pandas as pd
 import numpy as np
-from numba import njit
+
 
 class ROI:
+    """Calculate Return on investment for multiple intervals.
+    
+    Parameters
+    ----------
+    series : pd.Series
+        Closing prices with index set to time.
+    interval : int
+        Time interval for ROI calculation.
+
+    """
     def __init__(self, series: pd.Series, interval: int):
+
         self.series = series
         self.values = self.series.values
         self.interval = interval
@@ -36,7 +47,9 @@ class ROI:
         imax = interval_counts.max() // 1
         interval_counts = imax - interval_counts
         
-        return np.searchsorted(interval_counts, np.arange(imax))
+        out = np.searchsorted(interval_counts, np.arange(imax))
+        out = np.unique(out)
+        return out
     
     
     @cached_property
@@ -60,6 +73,17 @@ class ROI:
         c2 = self._closes[1:]
         c1 = self._closes[0 : -1]
         return (c2 - c1) / c2   
+    
+    
+    @cached_property
+    def _roi_adjusted(self):
+        """Special adjusted rate of return which I think is a better comparison.
+        - Normalize by final price for losses.
+        - Normalize by initial price for gains. """
+        index = self._roi_interval < 0
+        new = self._roi_interval.copy()
+        new[index] = self._rof_interval[index]
+        return new
     
     
     @cached_property
@@ -101,25 +125,43 @@ class ROI:
         
         This metric therefore punishes losses much greater than annualized ROI.
         """
-        index = self._roi_interval < 0
-        new = self._roi_interval.copy()
-        new[index] = self._rof_interval[index]
-        
-        annualized = (1 + new)**(365 / self.times_delta) - 1
+        r = self._roi_adjusted
+        annualized = (1 + r)**(365 / self.times_delta) - 1
         return annualized
     
     
+    @cached_property
+    def daily_adjusted(self):
+        """ndarray[float] : Special daily adjusted rate of return."""
+        r = self._roi_interval
+        return (1 + r)**(1 / self.times_delta) - 1
+
+
+def annualize(roi, duration: float):
+    """Annualize a ROI (return on investment) given a time duration in days."""
+    return (1 + roi) ** (365. / duration) - 1
+
     
+class ROIDaily(ROI):
+    """Calculate Daily Return on investment for multiple intervals.
+    
+    Parameters
+    ----------
+    series : pd.Series
+        Closing prices with index set to time.    
+    """
+    def __init__(self, series: pd.Series, ):
+
+        self.series = series
+        self.values = self.series.values
+        self.interval = 1        
         
         
+    @cached_property
+    def index_interval_starts(self):
+        len1 = len(self.series)
+        return np.arange(len1)
+    
 
-from backtester.stockdata import YahooData2
 
-y = YahooData2()
-df = y.dataframes['TQQQ']
-
-r = ROI(df['Adj Close'], 100)
-
-r.index_interval_starts
-r.annualized
 # r.times_delta

@@ -197,7 +197,7 @@ class TableData:
         return np.searchsorted(self.times, date)
     
     
-    def iloc(self, index):
+    def iloc(self, index) -> 'TableData':
         """Set index locations."""
         df = self.iloc_dataframe(index)
         return TableData(df, sort=False)
@@ -244,6 +244,11 @@ class TableData:
     def series_at(self, date: np.datetime64):
         ii = np.searchsorted(self.times, date)
         return self.df.iloc[ii]
+    
+    def array_between(self, start: np.datetime64, end: np.datetime64):
+        times = [start, end]
+        i1, i2 = np.searchsorted(self.times, times)
+        return self.values[i1 : i2]
     
     
     # def dataframe_after(self, date: np.datetime64):
@@ -292,12 +297,16 @@ class BaseData(metaclass=ABCMeta):
     @cached_property
     def dataframes(self) -> RecalcMapper[pd.DataFrame]:
         """Data dict in form of Pandas DataFrame."""
-
         def func1(name: str):
             return self.tables[name].dataframe
 
         r = RecalcMapper(self.symbol_names, function=func1)
         return r
+    
+    
+    
+    def __getitem__(self, key):
+        return self.dataframes[key]
     
     
     @cached_property
@@ -355,10 +364,11 @@ class BaseData(metaclass=ABCMeta):
         return df
     
     
-    def map(self, func: Callable):
+    def tmap(self, func: Callable):
+        """Map func(data : TableData) onto TableData."""
         new = copy.deepcopy(self)
-        new.tables = self.tables.map(func)
-        return new
+        return new.tables.map(func)
+        
     
     
     def filter_dates(self, 
@@ -550,6 +560,7 @@ class YahooData2(BaseData):
             
             symbols = yahoo_client.get_symbols()
         self.symbols = symbols
+        self.client = yahoo_client
         return
     
     

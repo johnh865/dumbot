@@ -127,13 +127,14 @@ class TradeDates:
     def update(self):
         series = self._build_series()
         df = series.to_frame()
+        logger.info('Updating trade dates')
         self.client.save_dataframe(df, TABLE_ALL_TRADE_DATES)
         return series.values
         
         
     def _read(self):
         df =  self.client.read_dataframe(TABLE_ALL_TRADE_DATES)
-        return df.values
+        return df.values[:,0]
     
     
     def get(self):
@@ -201,6 +202,11 @@ class YahooClient:
     
     
     def update(self, end_date=None):
+        
+        # Get last trading date
+        self.trade_dates.update()
+        today = self.trade_dates.get()[-1].astype('datetime64[D]')
+        
         # date = datetime.date.today()
         if len(self.symbols) == 0:
             self.init_data(end_date=end_date)
@@ -213,7 +219,6 @@ class YahooClient:
             test_symbol = self.symbols[0]
         
         date_last = self.read(test_symbol).index[-1] 
-        today = datetime.date.today()
           
         date1 = date_last + pd.DateOffset(days=1)
         date1 = str(date1.date())        
